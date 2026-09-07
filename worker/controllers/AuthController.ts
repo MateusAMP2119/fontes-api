@@ -1,7 +1,7 @@
 import { betterAuth } from 'better-auth'
 import { APIError } from 'better-auth/api'
 import { OrganizationModel } from '../models/OrganizationModel'
-import { jwt, organization, openAPI } from 'better-auth/plugins'
+import { jwt, organization, openAPI, emailOTP } from 'better-auth/plugins'
 import custom from '../openapi.json'
 
 type AuthSecrets = {
@@ -166,6 +166,8 @@ export class AuthController {
         window: 60,
         max: 100,
         customRules: {
+          '/email-otp/send-verification-otp': { window: 60, max: 3 },
+          '/sign-in/email-otp': { window: 60, max: 10 },
           '/sign-in/email': { window: 60, max: 10 },
           '/sign-up/email': { window: 60 * 60, max: 10 },
           '/request-password-reset': { window: 60 * 60, max: 5 },
@@ -174,6 +176,15 @@ export class AuthController {
       },
       plugins: [
         openAPI({ disableDefaultReference: true }),
+        emailOTP({
+          otpLength: 6, expiresIn: 600, allowedAttempts: 5, storeOTP: 'hashed',
+          async sendVerificationOTP({ email, otp }) {
+            await env.AUTH_EMAIL.send({
+              to: email, from: FROM, subject: 'O teu código de acesso — Fontes',
+              text: `O teu código de acesso é ${otp}. É válido durante 10 minutos. Se não foste tu, ignora este email.`,
+            })
+          },
+        }),
         organization({
           organizationHooks: {
             beforeCreateOrganization: async ({ organization }) => {

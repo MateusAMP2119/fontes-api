@@ -6,8 +6,9 @@ TypeScript Cloudflare Worker with Better Auth, D1, organizations, projects and S
 
 Requires Node.js 24+ and a Cloudflare account with access to the existing
 `fontes-app` D1 database configured as `APP_DB` in `wrangler.jsonc`.
-The repository does not provision databases or contain schema/migration files.
-Deploying preserves the existing schema and records; a new empty database is not supported automatically.
+The repository does not provision databases or include the baseline auth schema.
+Additive migrations live in `migrations/`; apply them explicitly before their API
+release. A new empty database is not supported automatically.
 
 ```sh
 npm ci
@@ -66,3 +67,31 @@ Register `http://localhost:8787/api/auth/callback/google` for development OAuth.
 
 Builds are minified. Project listing combines membership and visibility in one
 query; organization join limits use a D1 batch. Auth remains request-scoped.
+
+## Onboarding v2 rollout
+
+Apply `migrations/0001_onboarding.sql` to the existing `fontes-app` database before
+releasing this API, then release the frontend. This additive migration creates
+onboarding progress/preferences and invitation records. It does not replace the
+existing Better Auth or project schema. No migration is applied by the build.
+
+The email OTP plugin supports six-digit login codes (10-minute expiry, hashed
+storage, five attempts). Existing password endpoints remain compatible; the new
+frontend uses OTP or Google exclusively.
+
+`GET /api/onboarding` returns the verified user's workspace, profile, default
+project, preferences and completion state. `POST /api/onboarding` accepts a full
+setup snapshot (`operationId`, increasing `revision`, `name`, `slug`,
+`profileName`, `completed`, `changelog`, `daily`). Atomic conditional D1 writes and
+stable entity IDs make retries safe and reject stale operations. Existing users
+with a workspace and visible project skip onboarding. Display names replace the
+old required username step. Preferences are stored; newsletter delivery is owned
+by the email publishing system, not this endpoint.
+
+`POST /api/onboarding/invite` registers a random 256-bit token, workspace ID and
+optional recipient email. Only owners/admins can issue invitations. Tokens are
+stored hashed, expire after seven days, and email-specific invitations require a
+matching verified email. `POST /api/onboarding/join` accepts the token and grants
+member access. Email delivery uses a lease and retries the same invitation link;
+a crash after delivery but before acknowledgement can deliver a duplicate email.
+These endpoints require a verified session, and writes require a trusted Origin.
