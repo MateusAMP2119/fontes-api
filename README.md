@@ -23,7 +23,8 @@ Use a random production secret of at least 32 characters. Authorize
 `conta@fonteslabs.com` for `AUTH_EMAIL` and register
 `https://builder.fonteslabs.com/api/auth/callback/google` with Google.
 The canonical API origin is `https://api.fonteslabs.com`; it serves `/api/auth/*`
-and `/api/projects`. Legacy `builder.fonteslabs.com` routes remain available.
+and `/api/projects`. The legacy `builder.fonteslabs.com` callback host is also attached as a custom domain
+so it resolves even after the old frontend deployment is deleted.
 `GOOGLE_REDIRECT_URI` preserves that registered callback for both authorization
 and token exchange. The legacy callback route forwards code/state to the canonical
 API callback, where the API's host-only OAuth cookie is available. The redirect

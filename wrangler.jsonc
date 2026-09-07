@@ -8,19 +8,15 @@
   ],
   "routes": [
     {
-      "pattern": "builder.fonteslabs.com/api/auth/*",
-      "zone_name": "fonteslabs.com"
-    },
-    {
-      "pattern": "builder.fonteslabs.com/api/projects*",
-      "zone_name": "fonteslabs.com"
-    },
-    {
       "pattern": "api.fonteslabs.com",
       "custom_domain": true
     },
     {
       "pattern": "www.api.fonteslabs.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "builder.fonteslabs.com",
       "custom_domain": true
     }
   ],
