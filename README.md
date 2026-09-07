@@ -39,7 +39,7 @@ Register `http://localhost:5173/api/auth/callback/google` for development OAuth.
 
 - `worker/models/`: project and organization classes own D1 queries.
 - `worker/controllers/`: routing, authorization, application actions and Scalar docs.
-- `worker/auth.ts`: Better Auth configuration and email HTML.
+- `worker/controllers/AuthController.ts`: Better Auth configuration, username validation, email HTML and Scalar docs.
 - `worker/index.ts`: Worker entrypoint.
 
 Builds are minified. Project listing combines membership and visibility in one

@@ -1,5 +1,5 @@
 import { ApiController } from './controllers/ApiController'
-import type { WorkerEnv } from './auth'
+import type { WorkerEnv } from './controllers/AuthController'
 
 export default {
   fetch(request: Request, env: WorkerEnv, context: ExecutionContext): Promise<Response> {

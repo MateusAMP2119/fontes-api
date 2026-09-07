@@ -1,7 +1,6 @@
-import { isTrustedOrigin, type WorkerEnv } from '../auth'
 import { OrganizationModel } from '../models/OrganizationModel'
 import { ProjectModel } from '../models/ProjectModel'
-import { AuthController } from './AuthController'
+import { AuthController, type WorkerEnv } from './AuthController'
 import { OrganizationController } from './OrganizationController'
 import { ProjectController } from './ProjectController'
 
@@ -30,9 +29,9 @@ export class ApiController {
       }
       const auth = new AuthController(env, this.context)
       if (path === '/api/auth/openapi.json') return await auth.documentation(request)
-      if (path === '/api/projects') return await new ProjectController(new ProjectModel(env.APP_DB), auth).handle(request, isTrustedOrigin(request.headers.get('origin'), env))
+      if (path === '/api/projects') return await new ProjectController(new ProjectModel(env.APP_DB), auth).handle(request, AuthController.isTrustedOrigin(request.headers.get('origin'), env))
       if (path.startsWith('/api/auth/organization-access/')) {
-        return await new OrganizationController(new OrganizationModel(env.APP_DB), auth, env.BETTER_AUTH_SECRET).handle(request, isTrustedOrigin(request.headers.get('origin'), env))
+        return await new OrganizationController(new OrganizationModel(env.APP_DB), auth, env.BETTER_AUTH_SECRET).handle(request, AuthController.isTrustedOrigin(request.headers.get('origin'), env))
       }
       return await auth.handle(request)
     } catch (error) {
