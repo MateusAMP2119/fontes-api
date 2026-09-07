@@ -14,6 +14,14 @@
     {
       "pattern": "builder.fonteslabs.com/api/projects*",
       "zone_name": "fonteslabs.com"
+    },
+    {
+      "pattern": "api.fonteslabs.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.api.fonteslabs.com",
+      "custom_domain": true
     }
   ],
   "observability": {
@@ -37,7 +45,8 @@
     }
   ],
   "vars": {
-    "BETTER_AUTH_URL": "https://builder.fonteslabs.com"
+    "BETTER_AUTH_URL": "https://api.fonteslabs.com",
+    "GOOGLE_REDIRECT_URI": "https://builder.fonteslabs.com/api/auth/callback/google"
   },
   "limits": {
     "cpu_ms": 30000

@@ -15,7 +15,7 @@ export class ApiController {
     if (path.replace(/\/+$/, '') === '/api/auth/docs') return AuthController.page(request)
     if (!path.startsWith('/api/auth/') && path !== '/api/projects') return new Response(null, { status: 404 })
     const env = this.env
-    const base = URL.parse(env.BETTER_AUTH_URL ?? 'https://builder.fonteslabs.com')
+    const base = URL.parse(env.BETTER_AUTH_URL ?? 'https://api.fonteslabs.com')
     if (!base || (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(base.hostname))) || (env.BETTER_AUTH_SECRET?.length ?? 0) < 32) {
       return Response.json({ code: 'AUTH_NOT_CONFIGURED' }, { status: 503 })
     }

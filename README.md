@@ -22,7 +22,26 @@ npm run deploy
 Use a random production secret of at least 32 characters. Authorize
 `conta@fonteslabs.com` for `AUTH_EMAIL` and register
 `https://builder.fonteslabs.com/api/auth/callback/google` with Google.
-The Worker serves `/api/auth/*` and `/api/projects*` on `builder.fonteslabs.com`.
+The canonical API origin is `https://api.fonteslabs.com`; it serves `/api/auth/*`
+and `/api/projects`. Legacy `builder.fonteslabs.com` routes remain available.
+`GOOGLE_REDIRECT_URI` preserves that registered callback for both authorization
+and token exchange. The legacy callback route forwards code/state to the canonical
+API callback, where the API's host-only OAuth cookie is available. The redirect
+only accepts GET on the exact registered host/path, sets no-referrer and inherits
+no-store headers. No cross-subdomain session cookies are needed.
+Email verification and password-reset links use the API origin.
+
+Browser clients use `credentials: 'include'`. CORS uses the same allowlist as
+Better Auth, including `https://app.fonteslabs.com`, `https://www.app.fonteslabs.com`,
+the legacy builder/Pages origins and `http://localhost:5173`. OPTIONS requests are
+handled before auth/database work; unknown origins, methods and headers fail
+preflight. Actual responses, including errors, include credentialed CORS only for
+trusted origins and remain private/no-store. Cookies remain HttpOnly, Secure and
+SameSite=Lax in production. Use the HTTPS app domain for production login; a
+cross-site workers.dev preview cannot rely on these same-site cookies.
+
+News remains on the independent engine API at `https://fontes-api.bymarreco.com`;
+this auth Worker does not proxy news or receive news requests.
 Scalar docs are at `/api/auth/docs`. CI checks types and the bundle; deployment is explicit.
 
 ## Development
@@ -32,8 +51,10 @@ configured Cloudflare D1 database. Changes affect that database and emails use
 Cloudflare's email binding. There is no local database or email inbox.
 
 Copy `.dev.vars.example` to `.dev.vars` and supply development credentials.
-Run `fontes-app` on port 5173; it proxies port 8787 to the remote Worker.
-Register `http://localhost:5173/api/auth/callback/google` for development OAuth.
+For a local API development session, set the frontend's `VITE_API_URL` to
+`http://localhost:8787` and run `fontes-app` on port 5173. Both origins are same-site
+for cookies; production API cookies do not work cross-site from plain localhost.
+Register `http://localhost:8787/api/auth/callback/google` for development OAuth.
 
 ## Structure
 

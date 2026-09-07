@@ -10,14 +10,23 @@ type AuthSecrets = {
   GOOGLE_CLIENT_SECRET: string
   /** Canonical public origin; localhost uses the same routes and cookie flow. */
   BETTER_AUTH_URL?: string
+  GOOGLE_REDIRECT_URI?: string
 }
 
-export type WorkerEnv = Omit<AuthBindings, 'BETTER_AUTH_URL'> & AuthSecrets
+export type WorkerEnv = Omit<AuthBindings, 'BETTER_AUTH_URL' | 'GOOGLE_REDIRECT_URI'> & AuthSecrets
 
 const FROM = { email: 'conta@fonteslabs.com', name: 'Fontes' }
 
-const BASE_URL = 'https://builder.fonteslabs.com'
-const TRUSTED_ORIGINS = [BASE_URL, 'https://fontes-9lo.pages.dev', 'https://*.fontes-9lo.pages.dev']
+const BASE_URL = 'https://api.fonteslabs.com'
+const TRUSTED_ORIGINS = [
+  BASE_URL,
+  'https://app.fonteslabs.com',
+  'https://www.app.fonteslabs.com',
+  'https://builder.fonteslabs.com',
+  'https://fontes-9lo.pages.dev',
+  'https://*.fontes-9lo.pages.dev',
+  'http://localhost:5173',
+]
 
 function trustedOrigins(env: WorkerEnv) {
   return env.BETTER_AUTH_URL && !TRUSTED_ORIGINS.includes(env.BETTER_AUTH_URL)
@@ -147,6 +156,7 @@ export class AuthController {
         google: {
           clientId: env.GOOGLE_CLIENT_ID,
           clientSecret: env.GOOGLE_CLIENT_SECRET,
+          redirectURI: env.GOOGLE_REDIRECT_URI,
           requireEmailVerification: true,
         },
       },
