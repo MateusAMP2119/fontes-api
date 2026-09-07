@@ -1,0 +1,46 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "fontes-api",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-07",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "routes": [
+    {
+      "pattern": "builder.fonteslabs.com/api/auth/*",
+      "zone_name": "fonteslabs.com"
+    },
+    {
+      "pattern": "builder.fonteslabs.com/api/projects*",
+      "zone_name": "fonteslabs.com"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "redact_query_string": true
+  },
+  "d1_databases": [
+    {
+      "binding": "APP_DB",
+      "database_name": "fontes-app",
+      "database_id": "2d52f44f-e89a-487a-9149-94fb5ead9b32",
+      "migrations_dir": "migrations-auth"
+    }
+  ],
+  "send_email": [
+    {
+      "name": "AUTH_EMAIL",
+      "allowed_sender_addresses": [
+        "conta@fonteslabs.com"
+      ]
+    }
+  ],
+  "vars": {
+    "BETTER_AUTH_URL": "https://builder.fonteslabs.com"
+  },
+  "limits": {
+    "cpu_ms": 30000
+  }
+}

@@ -1,0 +1,306 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Fontes App API",
+    "version": "0.1.0",
+    "description": "Fontes API for authentication, organizations and projects. Auth endpoints are generated from the running Better Auth configuration. Browser sessions use HttpOnly cookies. Start Google login in the app so the browser retains its OAuth state cookie."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current environment"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Service"
+    },
+    {
+      "name": "Email"
+    },
+    {
+      "name": "Google"
+    },
+    {
+      "name": "Sessions"
+    },
+    {
+      "name": "Organizations"
+    },
+    {
+      "name": "Projects"
+    }
+  ],
+  "paths": {
+    "/api/auth/health": {
+      "get": {
+        "summary": "Check auth service readiness",
+        "operationId": "get_api_auth_health",
+        "tags": [
+          "Service"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Worker and database are ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "const": "ok"
+                    },
+                    "runtime": {
+                      "const": "cloudflare-worker"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Auth is not configured"
+          }
+        }
+      }
+    },
+    "/api/auth/organization-access/code": {
+      "get": {
+        "summary": "Get the active organization\u2019s temporary join code",
+        "operationId": "get_api_auth_organization_access_code",
+        "tags": [
+          "Organizations"
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "secureSessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verified owners/admins only; response contains id, name, slug, code and expiresAt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Untrusted origin, unverified email, or insufficient access"
+          },
+          "429": {
+            "description": "Request limit exceeded"
+          },
+          "401": {
+            "description": "No valid session"
+          }
+        }
+      }
+    },
+    "/api/auth/organization-access/join": {
+      "post": {
+        "summary": "Join an organization using its temporary code",
+        "operationId": "post_api_auth_organization_access_join",
+        "tags": [
+          "Organizations"
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "secureSessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Untrusted origin, unverified email, or insufficient access"
+          },
+          "429": {
+            "description": "Request limit exceeded"
+          },
+          "401": {
+            "description": "No valid session"
+          }
+        },
+        "description": "Send JSON from the same origin as the API. Browser requests include the Origin header automatically.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}$"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "code"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects": {
+      "get": {
+        "summary": "List visible projects in the active organization",
+        "operationId": "get_api_projects",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "secureSessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public organization projects and the current user\u2019s private projects",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Untrusted origin, unverified email, or insufficient access"
+          },
+          "429": {
+            "description": "Request limit exceeded"
+          },
+          "401": {
+            "description": "No valid session"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a project in the active organization",
+        "operationId": "post_api_projects",
+        "tags": [
+          "Projects"
+        ],
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "secureSessionCookie": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created project",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "403": {
+            "description": "Untrusted origin, unverified email, or insufficient access"
+          },
+          "429": {
+            "description": "Request limit exceeded"
+          },
+          "401": {
+            "description": "No valid session"
+          }
+        },
+        "description": "Send JSON from the same origin as the API. Browser requests include the Origin header automatically.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "private",
+                      "public"
+                    ],
+                    "default": "private"
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "better-auth.session_token",
+        "description": "Local HTTP session; managed by the browser."
+      },
+      "secureSessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Secure-better-auth.session_token",
+        "description": "HTTPS session; managed by the browser."
+      }
+    }
+  }
+}
