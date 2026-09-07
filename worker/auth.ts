@@ -1,7 +1,6 @@
 import { betterAuth } from 'better-auth'
 import { APIError } from 'better-auth/api'
 import { validUsername } from './onboarding-validation'
-import { EmailView } from './views/EmailView'
 import { OrganizationModel } from './models/OrganizationModel'
 import { jwt, organization, openAPI } from 'better-auth/plugins'
 
@@ -59,7 +58,7 @@ export function createAuth(env: WorkerEnv, waitUntil: (promise: Promise<unknown>
           to: user.email,
           from: FROM,
           subject: 'Recupera a tua palavra-passe — Fontes',
-          html: EmailView.render(
+          html: emailHtml(
             'Recuperar palavra-passe',
             'Recebemos um pedido para definires uma nova palavra-passe na tua conta.',
             'Definir nova palavra-passe',
@@ -78,7 +77,7 @@ export function createAuth(env: WorkerEnv, waitUntil: (promise: Promise<unknown>
           to: user.email,
           from: FROM,
           subject: 'Confirma a tua conta — Fontes',
-          html: EmailView.render(
+          html: emailHtml(
             'Confirma o teu email',
             'Só falta confirmares este endereço para começares a usar a tua conta Fontes.',
             'Confirmar conta',
@@ -173,3 +172,28 @@ export function createAuth(env: WorkerEnv, waitUntil: (promise: Promise<unknown>
 }
 
 export type Auth = ReturnType<typeof createAuth>
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+function emailHtml(title: string, body: string, action: string, url: string) {
+  const safeUrl = escapeHtml(url)
+  return `<!doctype html>
+  <html lang="pt"><body style="margin:0;background:#f6f4fb;font-family:Arial,sans-serif;color:#17131f">
+    <div style="max-width:520px;margin:0 auto;padding:44px 20px">
+      <div style="background:#fff;border:1px solid #e8e3ef;border-radius:20px;padding:36px">
+        <p style="font-size:22px;font-weight:700;margin:0 0 26px">Fontes</p>
+        <h1 style="font-size:25px;line-height:1.25;margin:0 0 14px">${escapeHtml(title)}</h1>
+        <p style="font-size:16px;line-height:1.55;color:#585061;margin:0 0 28px">${escapeHtml(body)}</p>
+        <a href="${safeUrl}" style="display:inline-block;background:#17131f;color:#fff;text-decoration:none;border-radius:10px;padding:13px 20px;font-weight:600">${escapeHtml(action)}</a>
+        <p style="font-size:12px;line-height:1.5;color:#82798c;margin:28px 0 0">Se não foste tu, podes ignorar este email.</p>
+      </div>
+    </div>
+  </body></html>`
+}

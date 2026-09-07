@@ -1,7 +1,6 @@
 import { isTrustedOrigin, type WorkerEnv } from '../auth'
 import { OrganizationModel } from '../models/OrganizationModel'
 import { ProjectModel } from '../models/ProjectModel'
-import { ApiDocsView } from '../views/ApiDocsView'
 import { AuthController } from './AuthController'
 import { OrganizationController } from './OrganizationController'
 import { ProjectController } from './ProjectController'
@@ -13,7 +12,7 @@ export class ApiController {
 
   async handle(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname
-    if (path.replace(/\/+$/, '') === '/api/auth/docs') return ApiDocsView.page(request)
+    if (path.replace(/\/+$/, '') === '/api/auth/docs') return AuthController.page(request)
     if (!path.startsWith('/api/auth/') && path !== '/api/projects') return new Response(null, { status: 404 })
     const env = this.env
     const base = URL.parse(env.BETTER_AUTH_URL ?? 'https://builder.fonteslabs.com')

@@ -7,8 +7,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "wrangler dev --config wrangler.local.jsonc --port 8787",
-    "db:init": "wrangler d1 execute fontes-app --config wrangler.local.jsonc --local --file schema.sql",
+    "dev": "wrangler dev --remote --port 8787 --var BETTER_AUTH_URL:http://localhost:5173",
     "build": "wrangler deploy --dry-run --outdir .wrangler/build",
     "typecheck": "wrangler types worker-configuration-auth.d.ts --env-interface AuthBindings && tsc -p worker/tsconfig.json",
     "deploy": "wrangler deploy"
