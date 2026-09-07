@@ -1,26 +1,23 @@
 {
   "name": "fontes-api",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "engines": {
     "node": ">=24"
   },
   "scripts": {
-    "dev": "node scripts/auth-local.mjs",
-    "build": "wrangler deploy --dry-run --outdir .wrangler/auth-dist",
-    "typecheck": "tsc -p worker/tsconfig.json",
-    "pretest": "node scripts/auth-local.mjs --build-test && npm run build",
-    "test": "node --test scripts/*.test.mjs",
-    "deploy": "wrangler deploy",
-    "db:migrate": "wrangler d1 migrations apply fontes-app --remote"
+    "dev": "wrangler dev --config wrangler.local.jsonc --port 8787",
+    "db:init": "wrangler d1 execute fontes-app --config wrangler.local.jsonc --local --file schema.sql",
+    "build": "wrangler deploy --dry-run --outdir .wrangler/build",
+    "typecheck": "wrangler types worker-configuration-auth.d.ts --env-interface AuthBindings && tsc -p worker/tsconfig.json",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "better-auth": "1.7.2"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "miniflare": "5.20260903.0-alpha",
     "typescript": "~6.0.2",
     "wrangler": "4.129.0"
   }

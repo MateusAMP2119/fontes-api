@@ -25,8 +25,7 @@
     {
       "binding": "APP_DB",
       "database_name": "fontes-app",
-      "database_id": "2d52f44f-e89a-487a-9149-94fb5ead9b32",
-      "migrations_dir": "migrations-auth"
+      "database_id": "2d52f44f-e89a-487a-9149-94fb5ead9b32"
     }
   ],
   "send_email": [

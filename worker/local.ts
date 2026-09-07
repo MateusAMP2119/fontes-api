@@ -1,7 +1,7 @@
 import app from './index'
 import type { WorkerEnv } from './auth'
 
-// This entrypoint is used ONLY by the generated local config. Production builds
+// This entrypoint is used ONLY by `wrangler.local.jsonc`. Production builds
 // worker/index.ts, which contains neither an inbox nor a simulated mail transport.
 export default {
   async fetch(request: Request, env: WorkerEnv, ctx: ExecutionContext): Promise<Response> {
