@@ -11,6 +11,7 @@ export class ApiController {
 
   async handle(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname
+    if (path === '/') return Response.redirect(new URL('/api/auth/docs', request.url).toString(), 302)
     if (path.replace(/\/+$/, '') === '/api/auth/docs') return AuthController.page(request)
     if (!path.startsWith('/api/auth/') && path !== '/api/projects') return new Response(null, { status: 404 })
     const env = this.env
