@@ -41,5 +41,6 @@
   },
   "limits": {
     "cpu_ms": 30000
-  }
+  },
+  "minify": true
 }

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Fontes App API",
-    "version": "0.1.0",
+    "version": "0.1.2",
     "description": "Fontes API for authentication, organizations and projects. Auth endpoints are generated from the running Better Auth configuration. Browser sessions use HttpOnly cookies. Start Google login in the app so the browser retains its OAuth state cookie."
   },
   "servers": [

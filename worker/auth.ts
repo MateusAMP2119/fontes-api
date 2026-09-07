@@ -1,9 +1,8 @@
 import { betterAuth } from 'better-auth'
 import { APIError } from 'better-auth/api'
-import { projects } from './projects'
-import { organizationAccess } from './organization-access'
 import { validUsername } from './onboarding-validation'
-import { apiSchema } from './api-docs'
+import { EmailView } from './views/EmailView'
+import { OrganizationModel } from './models/OrganizationModel'
 import { jwt, organization, openAPI } from 'better-auth/plugins'
 
 type AuthSecrets = {
@@ -18,31 +17,6 @@ export type WorkerEnv = Omit<AuthBindings, 'BETTER_AUTH_URL'> & AuthSecrets
 
 const FROM = { email: 'conta@fonteslabs.com', name: 'Fontes' }
 
-function escapeHtml(value: string) {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
-}
-
-function emailHtml(title: string, body: string, action: string, url: string) {
-  const safeUrl = escapeHtml(url)
-  return `<!doctype html>
-<html lang="pt"><body style="margin:0;background:#f6f4fb;font-family:Arial,sans-serif;color:#17131f">
-  <div style="max-width:520px;margin:0 auto;padding:44px 20px">
-    <div style="background:#fff;border:1px solid #e8e3ef;border-radius:20px;padding:36px">
-      <p style="font-size:22px;font-weight:700;margin:0 0 26px">Fontes</p>
-      <h1 style="font-size:25px;line-height:1.25;margin:0 0 14px">${escapeHtml(title)}</h1>
-      <p style="font-size:16px;line-height:1.55;color:#585061;margin:0 0 28px">${escapeHtml(body)}</p>
-      <a href="${safeUrl}" style="display:inline-block;background:#17131f;color:#fff;text-decoration:none;border-radius:10px;padding:13px 20px;font-weight:600">${escapeHtml(action)}</a>
-      <p style="font-size:12px;line-height:1.5;color:#82798c;margin:28px 0 0">Se não foste tu, podes ignorar este email.</p>
-    </div>
-  </div>
-</body></html>`
-}
-
 const BASE_URL = 'https://builder.fonteslabs.com'
 const TRUSTED_ORIGINS = [BASE_URL, 'https://fontes-9lo.pages.dev', 'https://*.fontes-9lo.pages.dev']
 
@@ -52,7 +26,7 @@ function trustedOrigins(env: WorkerEnv) {
     : TRUSTED_ORIGINS
 }
 
-function isTrustedOrigin(origin: string | null, env: WorkerEnv) {
+export function isTrustedOrigin(origin: string | null, env: WorkerEnv) {
   if (!origin) return false
   return trustedOrigins(env).some((pattern) =>
     pattern.includes('*')
@@ -61,7 +35,7 @@ function isTrustedOrigin(origin: string | null, env: WorkerEnv) {
   )
 }
 
-function createAuth(env: WorkerEnv, waitUntil: (promise: Promise<unknown>) => void) {
+export function createAuth(env: WorkerEnv, waitUntil: (promise: Promise<unknown>) => void) {
   const baseURL = env.BETTER_AUTH_URL ?? BASE_URL
   return betterAuth({
     appName: 'Fontes',
@@ -85,7 +59,7 @@ function createAuth(env: WorkerEnv, waitUntil: (promise: Promise<unknown>) => vo
           to: user.email,
           from: FROM,
           subject: 'Recupera a tua palavra-passe — Fontes',
-          html: emailHtml(
+          html: EmailView.render(
             'Recuperar palavra-passe',
             'Recebemos um pedido para definires uma nova palavra-passe na tua conta.',
             'Definir nova palavra-passe',
@@ -104,7 +78,7 @@ function createAuth(env: WorkerEnv, waitUntil: (promise: Promise<unknown>) => vo
           to: user.email,
           from: FROM,
           subject: 'Confirma a tua conta — Fontes',
-          html: emailHtml(
+          html: EmailView.render(
             'Confirma o teu email',
             'Só falta confirmares este endereço para começares a usar a tua conta Fontes.',
             'Confirmar conta',
@@ -180,9 +154,7 @@ function createAuth(env: WorkerEnv, waitUntil: (promise: Promise<unknown>) => vo
           // A new session resumes the user's first organization, so the client derives
           // onboarding from data instead of from the URL it signed in on.
           before: async (session) => {
-            const member = await env.APP_DB.prepare(
-              'SELECT organizationId FROM member WHERE userId = ? ORDER BY createdAt LIMIT 1',
-            ).bind(session.userId).first<{ organizationId: string }>()
+            const member = await new OrganizationModel(env.APP_DB).firstFor(session.userId)
             return { data: { ...session, activeOrganizationId: member?.organizationId ?? null } }
           },
         },
@@ -201,26 +173,3 @@ function createAuth(env: WorkerEnv, waitUntil: (promise: Promise<unknown>) => vo
 }
 
 export type Auth = ReturnType<typeof createAuth>
-
-export default {
-  async fetch(request: Request, env: WorkerEnv, context: ExecutionContext): Promise<Response> {
-    const auth = createAuth(env, (promise) => context.waitUntil(promise))
-    try {
-      if (new URL(request.url).pathname === '/api/auth/openapi.json') {
-        if (request.method !== 'GET') return new Response(null, { status: 405 })
-        return Response.json(await apiSchema(auth), { headers: { 'cache-control': 'no-cache' } })
-      }
-      if (new URL(request.url).pathname.startsWith('/api/auth/organization-access/')) return await organizationAccess(request, env, auth, isTrustedOrigin(request.headers.get('origin'), env))
-      if (new URL(request.url).pathname === '/api/projects') return await projects(request, env, auth, isTrustedOrigin(request.headers.get('origin'), env))
-      return await auth.handler(request)
-    } catch (error) {
-      console.error(JSON.stringify({
-        event: 'auth_request_failed',
-        method: request.method,
-        path: new URL(request.url).pathname,
-        error: error instanceof Error ? error.message : String(error),
-      }))
-      return Response.json({ message: 'Não foi possível concluir a autenticação.' }, { status: 500 })
-    }
-  },
-} satisfies ExportedHandler<WorkerEnv>

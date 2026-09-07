@@ -39,3 +39,14 @@ npm run deploy
 
 The `fontes-api` Worker serves `/api/auth/*` and `/api/projects*` on the app origin.
 CI checks types and the bundle; deployment is explicit.
+
+## Structure
+
+- `worker/models/`: project and organization classes own D1 queries.
+- `worker/controllers/`: request routing, authorization and application actions.
+- `worker/views/`: email HTML and Scalar documentation classes.
+- `worker/auth.ts`: Better Auth configuration; `worker/index.ts` is the entrypoint.
+
+Builds are minified. Project listing combines membership and visibility in one
+query; organization join limits use a D1 batch. Auth remains request-scoped and
+password hashing and authorization checks retain their security settings.

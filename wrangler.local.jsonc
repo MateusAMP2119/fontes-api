@@ -16,5 +16,6 @@
   ],
   "vars": {
     "BETTER_AUTH_URL": "http://localhost:5173"
-  }
+  },
+  "minify": true
 }
