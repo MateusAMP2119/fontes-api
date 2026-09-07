@@ -3,6 +3,7 @@ import { APIError } from 'better-auth/api'
 import { OrganizationModel } from '../models/OrganizationModel'
 import { jwt, organization, openAPI, emailOTP } from 'better-auth/plugins'
 import custom from '../openapi.json'
+import { createOAuthProxy } from '../oauth'
 
 type AuthSecrets = {
   BETTER_AUTH_SECRET: string
@@ -11,6 +12,7 @@ type AuthSecrets = {
   /** Canonical public origin; localhost uses the same routes and cookie flow. */
   BETTER_AUTH_URL?: string
   GOOGLE_REDIRECT_URI?: string
+  OAUTH_PROXY_SECRET?: string
 }
 
 export type WorkerEnv = Omit<AuthBindings, 'BETTER_AUTH_URL' | 'GOOGLE_REDIRECT_URI'> & AuthSecrets
@@ -176,6 +178,7 @@ export class AuthController {
       },
       plugins: [
         openAPI({ disableDefaultReference: true }),
+        createOAuthProxy(baseURL, env.OAUTH_PROXY_SECRET),
         emailOTP({
           otpLength: 6, expiresIn: 600, allowedAttempts: 5, storeOTP: 'hashed',
           async sendVerificationOTP({ email, otp }) {

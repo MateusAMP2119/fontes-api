@@ -15,6 +15,7 @@ npm ci
 npx wrangler secret put BETTER_AUTH_SECRET
 npx wrangler secret put GOOGLE_CLIENT_ID
 npx wrangler secret put GOOGLE_CLIENT_SECRET
+npx wrangler secret put OAUTH_PROXY_SECRET
 npm run typecheck
 npm run build
 npm run deploy
@@ -52,11 +53,23 @@ Scalar docs are at `/api/auth/docs`. CI checks types and the bundle; deployment 
 configured Cloudflare D1 database. Changes affect that database and emails use
 Cloudflare's email binding. There is no local database or email inbox.
 
-Copy `.dev.vars.example` to `.dev.vars` and supply development credentials.
+Remote development inherits the deployed Worker’s secrets, including
+`OAUTH_PROXY_SECRET`; there is no need to copy production credentials locally.
+If overriding credentials with `.dev.vars`, use `.dev.vars.example` and keep the
+proxy secret consistent with production.
 For a local API development session, set the frontend's `VITE_API_URL` to
-`http://localhost:8787` and run `fontes-app` on port 5173. Both origins are same-site
+`http://localhost:8788` and run `fontes-app` on port 5173. Both origins are same-site
 for cookies; production API cookies do not work cross-site from plain localhost.
-Register `http://localhost:8787/api/auth/callback/google` for development OAuth.
+Google continues to use the registered production callback. Better Auth’s OAuth
+proxy returns the encrypted profile to `http://localhost:8788`, where the local
+session cookie is set and checked. Deploy the OAuth proxy plugin to production
+before testing this flow. Set the same random `OAUTH_PROXY_SECRET` (at least 32
+characters) in production and `.dev.vars`; keep `BETTER_AUTH_SECRET` separate
+between environments. Never disable OAuth state or cookie checks.
+
+For the frontend, run `npm run dev:auth` to use the localhost API. Standard
+production builds retain `https://api.fonteslabs.com`. The local frontend must
+use `localhost`, not `127.0.0.1`, so both ports share the cookie site.
 
 ## Structure
 

@@ -1,3 +1,10 @@
+import { oAuthProxy } from 'better-auth/plugins'
+
+/** Keep cloud OAuth direct; return local sign-ins to the local cookie origin. */
+export function createOAuthProxy(baseURL: string, secret?: string) {
+  return oAuthProxy({ productionURL: 'https://api.fonteslabs.com', currentURL: baseURL, secret })
+}
+
 /** Preserve Google's registered callback while completing auth on the API host. */
 export function oauthCallbackRedirect(request: Request, apiOrigin: string, registeredCallback?: string): Response | undefined {
   if (request.method !== 'GET' || !registeredCallback) return
