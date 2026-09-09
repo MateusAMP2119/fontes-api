@@ -4,6 +4,7 @@ import { OrganizationModel } from '../models/OrganizationModel'
 import { jwt, organization, openAPI, emailOTP } from 'better-auth/plugins'
 import custom from '../openapi.json'
 import { createOAuthProxy } from '../oauth'
+import { sendTransactionalEmail, OTP_SECONDS, RESET_SECONDS, VERIFICATION_SECONDS } from '../email/send'
 
 type AuthSecrets = {
   BETTER_AUTH_SECRET: string
@@ -16,8 +17,6 @@ type AuthSecrets = {
 }
 
 export type WorkerEnv = Omit<AuthBindings, 'BETTER_AUTH_URL' | 'GOOGLE_REDIRECT_URI'> & AuthSecrets
-
-const FROM = { email: 'conta@fonteslabs.com', name: 'Fontes' }
 
 const BASE_URL = 'https://api.fonteslabs.com'
 const TRUSTED_ORIGINS = [
@@ -65,6 +64,9 @@ export class AuthController {
 
   session(request: Request) { return this.auth.api.getSession({ headers: request.headers }) }
   handle(request: Request) { return this.auth.handler(request) }
+  setPassword(request: Request, newPassword: string) {
+    return this.auth.api.setPassword({ headers: request.headers, body: { newPassword } })
+  }
 
   async documentation(request: Request) {
     if (request.method !== 'GET') return new Response(null, { status: 405 })
@@ -119,39 +121,18 @@ export class AuthController {
         enabled: true,
         requireEmailVerification: true,
         minPasswordLength: 8,
+        resetPasswordTokenExpiresIn: RESET_SECONDS,
         revokeSessionsOnPasswordReset: true,
         sendResetPassword: async ({ user, url }) => {
-          await env.AUTH_EMAIL.send({
-            to: user.email,
-            from: FROM,
-            subject: 'Recupera a tua palavra-passe — Fontes',
-            html: emailHtml(
-              'Recuperar palavra-passe',
-              'Recebemos um pedido para definires uma nova palavra-passe na tua conta.',
-              'Definir nova palavra-passe',
-              url,
-            ),
-            text: url,
-          })
+          await sendTransactionalEmail(env, user.email, { kind: 'reset-link', url })
         },
       },
       emailVerification: {
         sendOnSignUp: true,
         autoSignInAfterVerification: true,
-        expiresIn: 60 * 60 * 24,
+        expiresIn: VERIFICATION_SECONDS,
         sendVerificationEmail: async ({ user, url }) => {
-          await env.AUTH_EMAIL.send({
-            to: user.email,
-            from: FROM,
-            subject: 'Confirma a tua conta — Fontes',
-            html: emailHtml(
-              'Confirma o teu email',
-              'Só falta confirmares este endereço para começares a usar a tua conta Fontes.',
-              'Confirmar conta',
-              url,
-            ),
-            text: url,
-          })
+          await sendTransactionalEmail(env, user.email, { kind: 'verify-link', url })
         },
       },
       socialProviders: {
@@ -180,12 +161,9 @@ export class AuthController {
         openAPI({ disableDefaultReference: true }),
         createOAuthProxy(baseURL, env.OAUTH_PROXY_SECRET),
         emailOTP({
-          otpLength: 6, expiresIn: 600, allowedAttempts: 5, storeOTP: 'hashed',
-          async sendVerificationOTP({ email, otp }) {
-            await env.AUTH_EMAIL.send({
-              to: email, from: FROM, subject: 'O teu código de acesso — Fontes',
-              text: `O teu código de acesso é ${otp}. É válido durante 10 minutos. Se não foste tu, ignora este email.`,
-            })
+          otpLength: 6, expiresIn: OTP_SECONDS, allowedAttempts: 5, storeOTP: 'hashed',
+          async sendVerificationOTP({ email, otp, type }) {
+            await sendTransactionalEmail(env, email, { kind: type, code: otp })
           },
         }),
         organization({
@@ -250,29 +228,4 @@ export class AuthController {
       },
     })
   }
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
-}
-
-function emailHtml(title: string, body: string, action: string, url: string) {
-  const safeUrl = escapeHtml(url)
-  return `<!doctype html>
-  <html lang="pt"><body style="margin:0;background:#f6f4fb;font-family:Arial,sans-serif;color:#17131f">
-    <div style="max-width:520px;margin:0 auto;padding:44px 20px">
-      <div style="background:#fff;border:1px solid #e8e3ef;border-radius:20px;padding:36px">
-        <p style="font-size:22px;font-weight:700;margin:0 0 26px">Fontes</p>
-        <h1 style="font-size:25px;line-height:1.25;margin:0 0 14px">${escapeHtml(title)}</h1>
-        <p style="font-size:16px;line-height:1.55;color:#585061;margin:0 0 28px">${escapeHtml(body)}</p>
-        <a href="${safeUrl}" style="display:inline-block;background:#17131f;color:#fff;text-decoration:none;border-radius:10px;padding:13px 20px;font-weight:600">${escapeHtml(action)}</a>
-        <p style="font-size:12px;line-height:1.5;color:#82798c;margin:28px 0 0">Se não foste tu, podes ignorar este email.</p>
-      </div>
-    </div>
-  </body></html>`
 }

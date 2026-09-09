@@ -1,0 +1,13 @@
+{
+  "brand": "Fontes",
+  "signoff": "Cumprimentos,\nEquipa da Fontes",
+  "linkFallback": "Em alternativa ao botão, o link pode ser aberto no navegador:",
+  "subject": "Convite para a Fontes",
+  "title": "Convite para uma equipa na Fontes",
+  "preheader": "Convite para um ambiente de trabalho na Fontes.",
+  "body": "Foi enviado um convite para integrar um ambiente de trabalho na Fontes. A aceitação requer o início de sessão com o endereço de email que recebeu esta mensagem.",
+  "action": "Aceitar convite",
+  "expiry": "O convite expira 7 dias após a sua criação.",
+  "footer": "Se este convite não era esperado, esta mensagem pode ser ignorada.",
+  "text": "{{title}}\n\n{{body}}\n\n{{action}}: {{url}}\n\n{{expiry}}\n\n{{footer}}\n\n{{signoff}}"
+}

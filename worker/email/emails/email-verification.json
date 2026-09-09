@@ -1,0 +1,13 @@
+{
+  "brand": "Fontes",
+  "signoff": "Cumprimentos,\nEquipa da Fontes",
+  "linkFallback": "Em alternativa ao botão, o link pode ser aberto no navegador:",
+  "subject": "Fontes: Código de confirmação",
+  "title": "Confirmação de email",
+  "preheader": "Código de confirmação do endereço de email.",
+  "body": "Código para confirmar este endereço de email na Fontes.",
+  "action": "Código de confirmação",
+  "expiry": "O código é válido durante 10 minutos e só pode ser usado uma vez.",
+  "footer": "Este código é pessoal e não deve ser partilhado. Se esta confirmação não foi solicitada, esta mensagem pode ser ignorada.",
+  "text": "{{title}}\n\n{{body}}\n\n{{action}}: {{code}}\n\n{{expiry}}\n\n{{footer}}\n\n{{signoff}}"
+}

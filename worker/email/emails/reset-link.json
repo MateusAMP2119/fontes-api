@@ -1,0 +1,13 @@
+{
+  "brand": "Fontes",
+  "signoff": "Cumprimentos,\nEquipa da Fontes",
+  "linkFallback": "Em alternativa ao botão, o link pode ser aberto no navegador:",
+  "subject": "Fontes: Recuperação de palavra-passe",
+  "title": "Recuperação de palavra-passe",
+  "preheader": "Pedido de alteração de palavra-passe.",
+  "body": "Foi recebido um pedido de recuperação de acesso a uma conta Fontes. O botão abaixo permite definir uma nova palavra-passe.",
+  "action": "Definir nova palavra-passe",
+  "expiry": "Este link é válido durante 1 hora e só pode ser usado uma vez.",
+  "footer": "Se este pedido não foi efetuado, esta mensagem pode ser ignorada. A palavra-passe mantém-se.",
+  "text": "{{title}}\n\n{{body}}\n\n{{action}}: {{url}}\n\n{{expiry}}\n\n{{footer}}\n\n{{signoff}}"
+}

@@ -1,0 +1,13 @@
+{
+  "brand": "Fontes",
+  "signoff": "Cumprimentos,\nEquipa da Fontes",
+  "linkFallback": "Em alternativa ao botão, o link pode ser aberto no navegador:",
+  "subject": "Fontes: Confirmação de conta",
+  "title": "Confirmação de email",
+  "preheader": "Confirmação do endereço de email associado à conta Fontes.",
+  "body": "A confirmação deste endereço de email permite ativar a conta Fontes.",
+  "action": "Confirmar email",
+  "expiry": "Este link é válido durante 24 horas.",
+  "footer": "Se esta conta não foi criada pelo destinatário, esta mensagem pode ser ignorada.",
+  "text": "{{title}}\n\n{{body}}\n\n{{action}}: {{url}}\n\n{{expiry}}\n\n{{footer}}\n\n{{signoff}}"
+}

@@ -1,0 +1,13 @@
+{
+  "brand": "Fontes",
+  "signoff": "Cumprimentos,\nEquipa da Fontes",
+  "linkFallback": "Em alternativa ao botão, o link pode ser aberto no navegador:",
+  "subject": "Fontes: Código de acesso",
+  "title": "",
+  "preheader": "Código para concluir o início de sessão na Fontes.",
+  "body": "Código de acesso para iniciar sessão na Fontes.",
+  "action": "Código de acesso",
+  "expiry": "O código é válido durante 10 minutos e só pode ser usado uma vez.",
+  "footer": "Este código é pessoal e não deve ser partilhado. Se este acesso não foi solicitado, esta mensagem pode ser ignorada.",
+  "text": "{{body}}\n\n{{action}}: {{code}}\n\n{{expiry}}\n\n{{footer}}\n\n{{signoff}}"
+}
