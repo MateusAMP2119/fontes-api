@@ -10,7 +10,7 @@ import { memoryAdapter } from '${import.meta.resolve('better-auth/adapters/memor
 import { jwt, organization, openAPI, emailOTP } from '${import.meta.resolve('better-auth/plugins')}';
 import { createOAuthProxy } from '${new URL('../worker/oauth.ts',import.meta.url).href}';
 const custom={info:{},paths:{},components:{securitySchemes:{}}};
-const OrganizationModel=class {async firstFor(){return null}};
+const OrganizationModel=class {async resumeFor(){return null}};
 const OTP_SECONDS=600,RESET_SECONDS=3600,VERIFICATION_SECONDS=86400;
 async function sendTransactionalEmail(env,email,content){env.messages.push({email,...content})}
 `

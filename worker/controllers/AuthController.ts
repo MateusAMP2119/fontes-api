@@ -208,10 +208,9 @@ export class AuthController {
         },
         session: {
           create: {
-            // A new session resumes the user's first organization, so the client derives
-            // onboarding from data instead of from the URL it signed in on.
+            // Resume the saved workspace if membership is still valid.
             before: async (session) => {
-              const member = await new OrganizationModel(env.APP_DB).firstFor(session.userId)
+              const member = await new OrganizationModel(env.APP_DB).resumeFor(session.userId)
               return { data: { ...session, activeOrganizationId: member?.organizationId ?? null } }
             },
           },

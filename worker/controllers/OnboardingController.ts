@@ -73,6 +73,13 @@ export class OnboardingController {
       await db.batch([
         db.prepare(`INSERT INTO member (id, organizationId, userId, role, createdAt) SELECT ?, ?, ?, 'member', ? WHERE NOT EXISTS (SELECT 1 FROM member WHERE organizationId = ? AND userId = ?)`)
           .bind(`invite_${invite.organizationId}_${userId}`, invite.organizationId, userId, Date.now(), invite.organizationId, userId),
+        // Persist selection even when an existing account needs no further setup.
+        // Changing workspace invalidates queued snapshots; retrying the same join does not.
+        db.prepare(`INSERT INTO onboarding (userId, organizationId, operationId) VALUES (?, ?, ?)
+          ON CONFLICT(userId) DO UPDATE SET organizationId = excluded.organizationId,
+            revision = onboarding.revision + 1, operationId = excluded.operationId
+          WHERE onboarding.organizationId != excluded.organizationId`)
+          .bind(userId, invite.organizationId, crypto.randomUUID()),
         db.prepare('UPDATE session SET activeOrganizationId = ? WHERE id = ? AND userId = ?').bind(invite.organizationId, session.session.id, userId),
       ])
       return Response.json(await this.bootstrap(userId, invite.organizationId))

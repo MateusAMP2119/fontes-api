@@ -8,9 +8,10 @@ import ts from 'typescript'
 // Only the auth boundary and email transport are replaced; no network is used.
 const source = readFileSync(new URL('../worker/controllers/OnboardingController.ts', import.meta.url), 'utf8').replace(/^import .*\n/gm, '')
 const model = readFileSync(new URL('../worker/models/ProjectModel.ts', import.meta.url), 'utf8')
-const js = ts.transpileModule(`const AuthController = { isTrustedOrigin: (origin: string) => origin === 'https://app.fonteslabs.com' };\n${model}\n${source}`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
+const organizationModel = readFileSync(new URL('../worker/models/OrganizationModel.ts', import.meta.url), 'utf8')
+const js = ts.transpileModule(`const AuthController = { isTrustedOrigin: (origin: string) => origin === 'https://app.fonteslabs.com' };\n${model}\n${organizationModel}\n${source}`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
 const emailImport = `import { sendTransactionalEmail, INVITE_SECONDS } from '${new URL('../worker/email/send.ts', import.meta.url).href}';\n`
-const { OnboardingController } = await import('data:text/javascript;base64,' + Buffer.from(emailImport + js).toString('base64'))
+const { OnboardingController, OrganizationModel } = await import('data:text/javascript;base64,' + Buffer.from(emailImport + js).toString('base64'))
 function fixture() {
  const sql = new DatabaseSync(':memory:')
  sql.exec(`PRAGMA foreign_keys=ON;
@@ -30,7 +31,7 @@ function fixture() {
  const controller=new OnboardingController({APP_DB:db,AUTH_EMAIL:{send:async email=>{emails.push(email);return {messageId:'test-invite'}}}},{session:async()=>identity,setPassword:async(request,password)=>{const existing=sql.prepare("SELECT id FROM account WHERE userId=? AND providerId='credential' AND password IS NOT NULL").get(identity.user.id);if(existing)throw Error('already set');sql.prepare("INSERT INTO account VALUES (?,?,'credential',?)").run('new-'+identity.user.id,identity.user.id,'hashed-in-auth-boundary')}})
  const call=(path='',body,origin='https://app.fonteslabs.com')=>controller.handle(new Request('https://api.fonteslabs.com/api/onboarding'+path,{method:body?'POST':'GET',headers:{origin,'content-type':'application/json'},body:body?JSON.stringify(body):undefined}))
  const setup={operationId:'operation-first',revision:1,name:'Fontes',slug:'fontes-team',profileName:'Mateus',completed:true,changelog:true,daily:false}
- return {sql,call,setup,emails,identity:value=>{identity=value}}
+ return {sql,call,setup,emails,organizations:new OrganizationModel(db),identity:value=>{identity=value}}
 }
 test('atomic setup, idempotent retries, stale rejection and default project',async()=>{
  const f=fixture();assert.equal((await f.call('',f.setup)).status,200);assert.equal((await f.call('',f.setup)).status,200)
@@ -140,4 +141,51 @@ test('availability uses exact URLs, authenticates and never creates workspace da
  assert.deepEqual(await (await f.call('/availability',{slug:'fontes-team',organizationId:'onboarding_u'})).json(),{available:false})
  f.identity(null);assert.equal((await f.call('/availability',{slug:'fontes-team'})).status,401)
  f.sql.close()
+})
+
+
+test('fresh sessions restore an accepted workspace, including joins with no further setup', async () => {
+ const f = fixture()
+ try {
+  await f.call('', f.setup)
+  f.sql.exec("UPDATE project SET visibility='public' WHERE organizationId='onboarding_u'")
+  const token = 'ab'.repeat(32)
+  await f.call('/invite', { token, email: 'v@example.com', organizationId: 'onboarding_u' })
+  const visitor = { user: { id: 'v', email: 'v@example.com', emailVerified: true }, session: { id: 'sv', activeOrganizationId: null } }
+  f.identity(visitor)
+  await f.call('', { ...f.setup, name: 'Original workspace', slug: 'visitor-own' })
+  f.sql.exec("UPDATE member SET createdAt=0 WHERE userId='v'")
+  assert.equal((await f.organizations.resumeFor('v')).organizationId, 'onboarding_v')
+  const joined = await (await f.call('/join', { token })).json()
+  assert.equal(joined.organization.id, 'onboarding_u')
+  assert.equal(joined.completed, true)
+  assert.ok(joined.project, 'no additional setup is needed before entry')
+  assert.equal(joined.changelog, true, 'joining preserves existing preferences')
+  assert.equal(joined.revision, 2)
+  const retried = await (await f.call('/join', { token })).json()
+  assert.equal(retried.revision, joined.revision, 'retrying acceptance does not create another revision')
+  assert.equal(retried.operationId, joined.operationId)
+  const stale = await f.call('', { ...f.setup, slug: 'visitor-own', revision: 2, operationId: 'stale-original-workspace', organizationId: 'onboarding_v' })
+  assert.equal(stale.status, 409, 'a queued original-workspace save cannot undo acceptance')
+  visitor.session = { id: 'new-session', activeOrganizationId: (await f.organizations.resumeFor('v')).organizationId }
+  const returning = await (await f.call()).json()
+  assert.equal(returning.organization.id, 'onboarding_u', 'a fresh session keeps the invited workspace')
+  assert.equal(returning.completed, true)
+ } finally { f.sql.close() }
+})
+
+test('workspace restoration falls back safely when selection is absent or membership is revoked', async () => {
+ const f = fixture()
+ try {
+  assert.equal(await f.organizations.resumeFor('v'), null)
+  await f.call('', f.setup)
+  f.sql.exec("INSERT INTO organization VALUES ('other','Other','other-workspace',1); INSERT INTO member VALUES ('v-old','other','v','member',0),('v-new','onboarding_u','v','member',1)")
+  assert.equal((await f.organizations.resumeFor('v')).organizationId, 'other', 'legacy account without onboarding uses its first membership')
+  f.sql.exec("INSERT INTO onboarding (userId,organizationId) VALUES ('v','onboarding_u')")
+  assert.equal((await f.organizations.resumeFor('v')).organizationId, 'onboarding_u')
+  f.sql.exec("DELETE FROM member WHERE userId='v' AND organizationId='onboarding_u'")
+  assert.equal((await f.organizations.resumeFor('v')).organizationId, 'other', 'saved selection cannot restore revoked access')
+  f.sql.exec("DELETE FROM member WHERE userId='v'")
+  assert.equal(await f.organizations.resumeFor('v'), null)
+ } finally { f.sql.close() }
 })
