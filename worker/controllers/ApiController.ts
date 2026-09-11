@@ -1,4 +1,6 @@
+import briefing from '../../briefing/index.ts'
 import { OnboardingController } from './OnboardingController'
+import { BriefingController } from './BriefingController'
 import { OrganizationModel } from '../models/OrganizationModel'
 import { ProjectModel } from '../models/ProjectModel'
 import { AuthController, type WorkerEnv } from './AuthController'
@@ -14,7 +16,11 @@ export class ApiController {
     const path = new URL(request.url).pathname
     if (path === '/') return Response.redirect(new URL('/api/auth/docs', request.url).toString(), 302)
     if (path.replace(/\/+$/, '') === '/api/auth/docs') return AuthController.page(request)
-    if (!path.startsWith('/api/auth/') && path !== '/api/projects' && !path.startsWith('/api/onboarding')) return new Response(null, { status: 404 })
+    if (!path.startsWith('/api/auth/') && path !== '/api/projects' && !path.startsWith('/api/onboarding') && path !== '/api/briefing' && path !== '/api/briefing/generate') return new Response(null, { status: 404 })
+    if (path === '/api/briefing/generate') {
+      const url = new URL(request.url); url.pathname = '/generate'
+      return briefing.fetch(new Request(url, request), this.env)
+    }
     const env = this.env
     const base = URL.parse(env.BETTER_AUTH_URL ?? 'https://api.fonteslabs.com')
     if (!base || (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(base.hostname))) || (env.BETTER_AUTH_SECRET?.length ?? 0) < 32) {
@@ -30,6 +36,7 @@ export class ApiController {
         return Response.json({ code: 'GOOGLE_NOT_CONFIGURED' }, { status: 503 })
       }
       const auth = new AuthController(env, this.context)
+      if (path.startsWith('/api/briefing')) return await new BriefingController(env, auth).handle(request)
       if (path.startsWith('/api/onboarding')) return await new OnboardingController(env, auth).handle(request)
       if (path === '/api/auth/openapi.json') return await auth.documentation(request)
       if (path === '/api/projects') return await new ProjectController(new ProjectModel(env.APP_DB), auth).handle(request, AuthController.isTrustedOrigin(request.headers.get('origin'), env))

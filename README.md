@@ -43,9 +43,10 @@ trusted origins and remain private/no-store. Cookies remain HttpOnly, Secure and
 SameSite=Lax in production. Use the HTTPS app domain for production login; a
 cross-site workers.dev preview cannot rely on these same-site cookies.
 
-News remains on the independent engine API at `https://fontes-api.bymarreco.com`;
-this auth Worker does not proxy news or receive news requests.
-Scalar docs are at `/api/auth/docs`. CI checks types and the bundle; deployment is explicit.
+News remains on the independent engine API at `https://fontes-api.bymarreco.com`.
+Briefing generation runs inside this Worker at `POST /api/briefing/generate`,
+using a server-held bearer token and explicit `from`/`until` timestamps. Saved
+briefings remain in the existing D1 database. See [briefings](docs/briefing.md).
 
 ## Development
 

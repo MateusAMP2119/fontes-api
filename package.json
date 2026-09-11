@@ -14,7 +14,8 @@
     "test": "node --import ./scripts/email-assets.mjs --test tests/*.test.mjs",
     "email:preview": "node --import ./scripts/email-assets.mjs scripts/preview-emails.mjs",
     "email:package": "node --import ./scripts/email-assets.mjs scripts/publish-emails.mjs",
-    "email:publish": "node --import ./scripts/email-assets.mjs scripts/publish-emails.mjs --upload"
+    "email:publish": "node --import ./scripts/email-assets.mjs scripts/publish-emails.mjs --upload",
+    "check": "npm test && npm run typecheck && npm run build"
   },
   "dependencies": {
     "better-auth": "1.7.2",

@@ -6,3 +6,4 @@ node_modules/
 *.log
 .DS_Store
 worker-configuration-auth.d.ts
+worker-configuration-briefing.d.ts
