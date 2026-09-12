@@ -32,7 +32,7 @@ and token exchange. The legacy callback route forwards code/state to the canonic
 API callback, where the API's host-only OAuth cookie is available. The redirect
 only accepts GET on the exact registered host/path, sets no-referrer and inherits
 no-store headers. No cross-subdomain session cookies are needed.
-Email verification and password-reset links use the API origin.
+Registration verifies email through a six-digit code. Password-reset links use the API origin.
 
 Browser clients use `credentials: 'include'`. CORS uses the same allowlist as
 Better Auth, including `https://app.fonteslabs.com`, `https://www.app.fonteslabs.com`,

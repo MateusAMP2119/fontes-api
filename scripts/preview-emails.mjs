@@ -6,7 +6,7 @@ import { renderEmail } from '../worker/email/send.ts'
 const dir = new URL('../.wrangler/email-previews/', import.meta.url)
 await mkdir(dir, { recursive: true })
 for (const kind of Object.keys(messages)) {
-  const content = ['verify-link', 'reset-link', 'invite'].includes(kind)
+  const content = ['reset-link', 'invite'].includes(kind)
     ? { kind, url: 'https://app.fonteslabs.com/?preview=email' }
     : { kind, code: '012345' }
   const email = renderEmail(content)

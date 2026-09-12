@@ -4,13 +4,12 @@ import { bundledTemplate, parseEmailPair, TEMPLATE_PREFIX, type EmailTemplate } 
 
 export const OTP_SECONDS = 600
 export const RESET_SECONDS = 3600
-export const VERIFICATION_SECONDS = 86400
 export const INVITE_SECONDS = 7 * 86400
 
 export type OtpPurpose = 'sign-in' | 'email-verification' | 'forget-password' | 'change-email'
 export type EmailContent =
   | { kind: OtpPurpose; code: string }
-  | { kind: 'verify-link' | 'reset-link' | 'invite'; url: string }
+  | { kind: 'reset-link' | 'invite'; url: string }
 type EmailEnv = Pick<AuthBindings, 'AUTH_EMAIL' | 'EMAIL_TEMPLATES'>
 
 function escapeHtml(value: string) {

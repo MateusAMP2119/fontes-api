@@ -31,7 +31,7 @@ test('root and docs remain public while the schema includes only retained API op
   const response = await configured.handle(new Request('https://api.fonteslabs.com/api/auth/openapi.json'))
   assert.equal(response.status, 200)
   const schema = await response.json()
-  assert.equal(Object.keys(schema.paths).length, 19)
+  assert.equal(Object.keys(schema.paths).length, 18)
   assert.deepEqual(schema.security, [])
   for (const path of ['/api/auth/email-otp/send-verification-otp', '/api/auth/sign-in/email-otp', '/api/auth/sign-in/email', '/api/auth/sign-in/social']) assert.deepEqual(schema.paths[path].post.security, [], path)
   assert.equal(schema.paths['/api/auth/sign-in/email-otp'].post.summary, 'Verify registration code')
@@ -47,10 +47,11 @@ test('root and docs remain public while the schema includes only retained API op
   }
   assert.equal(schema.components.securitySchemes.sessionBearer.scheme, 'bearer')
   assert.equal(schema.components.securitySchemes.briefingBearer, undefined)
-  assert.deepEqual(schema.tags.map(tag => tag.name), ['Authentication', 'Email verification', 'Onboarding', 'Briefing'])
+  assert.deepEqual(schema.tags.map(tag => tag.name), ['Authentication', 'Onboarding', 'Briefing'])
+  assert.equal(schema.paths['/api/auth/verify-email'], undefined)
   const expectedTags = {
     '/api/auth/sign-in/social': 'Authentication', '/api/auth/get-session': 'Authentication',
-    '/api/auth/set-password': 'Authentication', '/api/auth/verify-email': 'Email verification',
+    '/api/auth/set-password': 'Authentication',
     '/api/onboarding': 'Onboarding', '/api/briefing': 'Briefing',
   }
   for (const [path, tag] of Object.entries(expectedTags)) {

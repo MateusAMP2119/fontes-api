@@ -9,6 +9,7 @@ test('production auth config supports OTP migration, password login, reset and s
  const verified=await f.call('/sign-in/email-otp',{email,otp:code});assert.equal(verified.status,200)
  const cookie=cookies(verified),session=await f.auth.session(f.request('/get-session',undefined,cookie))
  assert.equal(session.user.emailVerified,true)
+ assert.deepEqual(f.env.messages.map(message=>message.kind),['sign-in'],'registration only sends the verification code')
  await f.auth.setPassword(f.request('/unused',undefined,cookie),'first-password-123')
  assert.equal(f.env.store.user.length,1)
  const credential=f.env.store.account.find(a=>a.providerId==='credential');assert.ok(credential.password);assert.notEqual(credential.password,'first-password-123')

@@ -5,7 +5,7 @@ import { OrganizationModel } from '../models/OrganizationModel'
 import { bearer, openAPI, emailOTP } from 'better-auth/plugins'
 import custom from '../openapi.json'
 import { createOAuthProxy } from '../oauth'
-import { sendTransactionalEmail, OTP_SECONDS, RESET_SECONDS, VERIFICATION_SECONDS } from '../email/send'
+import { sendTransactionalEmail, OTP_SECONDS, RESET_SECONDS } from '../email/send'
 
 type AuthSecrets = {
   BETTER_AUTH_SECRET: string
@@ -59,7 +59,7 @@ const html = `<!doctype html>
 // Public auth surface used by the app, including redirects from Google and email.
 const GET_PATHS = new Set([
   '/api/auth/get-session', '/api/auth/callback/google', '/api/auth/oauth-proxy-callback',
-  '/api/auth/verify-email', '/api/auth/error',
+  '/api/auth/error',
 ])
 const POST_PATHS = new Set([
   '/api/auth/sign-in/social', '/api/auth/sign-in/email', '/api/auth/sign-in/email-otp',
@@ -174,7 +174,7 @@ export class AuthController {
         operation.description = 'Requires a verified session and password. Use an empty string only when no password exists. Replaces all sessions and returns the new token, session and user.'
       }
       if (path === '/get-session') operation.description = 'Returns the current session and user, or null.'
-      operation.tags = [path === '/verify-email' ? 'Email verification' : 'Authentication']
+      operation.tags = ['Authentication']
       if (path === '/sign-in/social') {
         operation.description = 'Starts Google sign-in. callbackURL is the return address, e.g. https://app.fonteslabs.com/.'
       }
@@ -184,7 +184,7 @@ export class AuthController {
       return [[fullPath.replace('{id}', 'google'), { [method]: { ...operation, security, ...(labels[path] ? { summary: labels[path] } : {}) } }]]
     }))
     return Response.json({ ...generated, info: custom.info, servers: [{ url: '/' }], security: [],
-      tags: [...['Authentication', 'Email verification'].map(name => ({ name })), ...custom.tags],
+      tags: [{ name: 'Authentication' }, ...custom.tags],
       paths: { ...paths, ...custom.paths },
       components: { ...generated.components, securitySchemes: custom.components.securitySchemes },
     })
@@ -244,14 +244,6 @@ export class AuthController {
         revokeSessionsOnPasswordReset: true,
         sendResetPassword: async ({ user, url }) => {
           await sendTransactionalEmail(env, user.email, { kind: 'reset-link', url })
-        },
-      },
-      emailVerification: {
-        sendOnSignUp: true,
-        autoSignInAfterVerification: true,
-        expiresIn: VERIFICATION_SECONDS,
-        sendVerificationEmail: async ({ user, url }) => {
-          await sendTransactionalEmail(env, user.email, { kind: 'verify-link', url })
         },
       },
       socialProviders: {

@@ -21,11 +21,10 @@ All paths below are relative to `/api/auth`.
 | POST | `/request-password-reset` | Send a recovery email. |
 | GET | `/reset-password/:token` | Follow the recovery email link. |
 | POST | `/reset-password` | Set a password using a recovery token. |
-| GET | `/verify-email` | Complete verification links, including previously issued links. |
 
 `AuthController.publicMethod` defines the public auth surface. Better Auth core and email OTP still provide server-side implementation, but unlisted HTTP routes are rejected before invoking their handlers. The organization and JWT plugins have been removed. OpenAPI generation is used only for the filtered documentation schema. The existing `session.activeOrganizationId` column is retained as a server-controlled additional field so workspace restoration and onboarding keep working. `auth.api.setPassword` is a server-only operation called by onboarding.
 
-Email codes are registration-only. Existing accounts use password or Google; unfinished accounts without a password can use password recovery.
+Email codes are registration-only. Successful code verification marks the email as verified and creates a session; no separate confirmation link is required. The former `/verify-email` endpoint is unavailable, including for previously issued links. Existing accounts use password or Google; unfinished accounts without a password can use password recovery.
 
 ## Callback URLs
 

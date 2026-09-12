@@ -23,8 +23,8 @@ for (const kind of purposes) {
 }
 
 test('link messages retain complete URLs and escape HTML attributes', () => {
-  for (const kind of ['verify-link', 'reset-link', 'invite']) {
-    const url = 'https://api.fonteslabs.com/api/auth/verify-email?token=test&callbackURL=https%3A%2F%2Fapp.fonteslabs.com'
+  for (const kind of ['reset-link', 'invite']) {
+    const url = 'https://api.fonteslabs.com/api/auth/reset-password/test?token=test&callbackURL=https%3A%2F%2Fapp.fonteslabs.com'
     const email = renderEmail({ kind, url })
     assert.ok(email.text.includes(url))
     assert.ok(email.html.includes('token=test&amp;callbackURL='))
@@ -38,7 +38,7 @@ test('unsafe actions and malformed codes cannot be rendered', () => {
     assert.throws(() => renderEmail({ kind: 'reset-link', url }))
   }
   for (const code of ['12345', '1234567', '<img>', '123 45']) assert.throws(() => renderEmail({ kind: 'sign-in', code }))
-  assert.doesNotThrow(() => renderEmail({ kind: 'verify-link', url: 'http://localhost:8788/api/auth/verify-email?token=test' }))
+  assert.doesNotThrow(() => renderEmail({ kind: 'reset-link', url: 'http://localhost:8788/api/auth/reset-password/test?token=test' }))
 })
 
 

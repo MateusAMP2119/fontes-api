@@ -6,8 +6,6 @@ import html2 from './emails/forget-password.html'
 import copy2 from './emails/forget-password.json' with { type: 'json' }
 import html3 from './emails/change-email.html'
 import copy3 from './emails/change-email.json' with { type: 'json' }
-import html4 from './emails/verify-link.html'
-import copy4 from './emails/verify-link.json' with { type: 'json' }
 import html5 from './emails/reset-link.html'
 import copy5 from './emails/reset-link.json' with { type: 'json' }
 import html6 from './emails/invite.html'
@@ -18,7 +16,6 @@ export const bundledTemplate = { messages: {
   'email-verification': { html: html1, copy: copy1 },
   'forget-password': { html: html2, copy: copy2 },
   'change-email': { html: html3, copy: copy3 },
-  'verify-link': { html: html4, copy: copy4 },
   'reset-link': { html: html5, copy: copy5 },
   'invite': { html: html6, copy: copy6 }
 } }
@@ -34,7 +31,7 @@ export function parseEmailPair(kind: EmailKind, html: string, value: unknown) {
     if (key !== 'text' && text.includes('{{')) return fail()
   }
   if (!copy.subject.trim() || /[\r\n]/.test(copy.subject)) return fail()
-  const dynamic = ['verify-link', 'reset-link', 'invite'].includes(kind) ? 'url' : 'code'
+  const dynamic = ['reset-link', 'invite'].includes(kind) ? 'url' : 'code'
   for (const body of [html, copy.text]) {
     const slots = [...body.matchAll(/\{\{(.*?)\}\}/g)].map(m => m[1])
     if (!slots.includes(dynamic) || slots.some(key => key !== dynamic && !Object.hasOwn(copy, key))) return fail()

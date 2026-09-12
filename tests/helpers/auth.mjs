@@ -10,7 +10,7 @@ import { bearer, openAPI, emailOTP } from '${import.meta.resolve('better-auth/pl
 import { createOAuthProxy } from '${new URL('../../worker/oauth.ts',import.meta.url).href}';
 const custom=${readFileSync(new URL('../../worker/openapi.json',import.meta.url),'utf8')};
 const OrganizationModel=class {constructor(store){this.store=store}async resumeFor(){return this.store?.activeOrganizationId ? {organizationId:this.store.activeOrganizationId}:null}};
-const OTP_SECONDS=600,RESET_SECONDS=3600,VERIFICATION_SECONDS=86400;
+const OTP_SECONDS=600,RESET_SECONDS=3600;
 async function sendTransactionalEmail(env,email,content){env.messages.push({email,...content})}
 `
 const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
