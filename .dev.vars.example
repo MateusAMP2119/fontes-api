@@ -1,5 +1,3 @@
 BETTER_AUTH_SECRET=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-# Same dedicated proxy secret on production and development.
-OAUTH_PROXY_SECRET=

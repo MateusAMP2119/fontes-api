@@ -4,7 +4,6 @@ import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { OrganizationModel } from '../models/OrganizationModel'
 import { bearer, openAPI, emailOTP } from 'better-auth/plugins'
 import custom from '../openapi.json'
-import { createOAuthProxy } from '../oauth'
 import { sendTransactionalEmail, OTP_SECONDS, RESET_SECONDS } from '../email/send'
 
 type AuthSecrets = {
@@ -14,7 +13,6 @@ type AuthSecrets = {
   /** Canonical public origin; localhost uses the same routes and cookie flow. */
   BETTER_AUTH_URL?: string
   GOOGLE_REDIRECT_URI?: string
-  OAUTH_PROXY_SECRET?: string
 }
 
 export type WorkerEnv = Omit<AuthBindings, 'BETTER_AUTH_URL' | 'GOOGLE_REDIRECT_URI'> & AuthSecrets
@@ -58,8 +56,7 @@ const html = `<!doctype html>
 
 // Public auth surface used by the app, including redirects from Google and email.
 const GET_PATHS = new Set([
-  '/api/auth/get-session', '/api/auth/callback/google', '/api/auth/oauth-proxy-callback',
-  '/api/auth/error',
+  '/api/auth/get-session', '/api/auth/callback/google',
 ])
 const POST_PATHS = new Set([
   '/api/auth/sign-in/social', '/api/auth/sign-in/email', '/api/auth/sign-in/email-otp',
@@ -144,7 +141,10 @@ export class AuthController {
         '/sign-in/email-otp': 'Verify registration code',
         '/sign-in/email': 'Log in account',
         '/get-session': 'Read current session',
-        '/change-password': 'Set password',
+        '/change-password': 'Set or change password (signed in)',
+        '/request-password-reset': 'Send password recovery email',
+        '/reset-password/{token}': 'Open password recovery link',
+        '/reset-password': 'Reset forgotten password',
       }
       const codePurpose = operation.requestBody?.content?.['application/json']?.schema?.properties?.type
       if (path === '/email-otp/send-verification-otp' && codePurpose) {
@@ -171,8 +171,11 @@ export class AuthController {
           if (sessionSchema) responseSchema.properties.session = sessionSchema
           responseSchema.required = ['token', 'session', 'user']
         }
-        operation.description = 'Requires a verified session and password. Use an empty string only when no password exists. Replaces all sessions and returns the new token, session and user.'
+        operation.description = 'Sets the first password or changes an existing password for a verified, signed-in account. Requires the current password when one exists; otherwise password must be an empty string. Replaces all sessions and returns the new token, session and user.'
       }
+      if (path === '/request-password-reset') operation.description = 'Starts password recovery without a session or current password. Emails a recovery link valid for one hour. Returns a generic response whether or not the account exists.'
+      if (path === '/reset-password/{token}') operation.description = 'Checks the emailed recovery token and redirects to the app password-reset form. Does not change the password.'
+      if (path === '/reset-password') operation.description = 'Sets a new password using a single-use recovery token. Requires no session or current password and revokes existing sessions.'
       if (path === '/get-session') operation.description = 'Returns the current session and user, or null.'
       operation.tags = ['Authentication']
       if (path === '/sign-in/social') {
@@ -246,13 +249,14 @@ export class AuthController {
           await sendTransactionalEmail(env, user.email, { kind: 'reset-link', url })
         },
       },
+      onAPIError: { errorURL: 'https://app.fonteslabs.com/google-auth.html?complete=1' },
       socialProviders: {
-        google: {
+        google: new URL(baseURL).origin === 'https://api.fonteslabs.com' ? {
           clientId: env.GOOGLE_CLIENT_ID,
           clientSecret: env.GOOGLE_CLIENT_SECRET,
           redirectURI: env.GOOGLE_REDIRECT_URI,
           requireEmailVerification: true,
-        },
+        } : undefined,
       },
       rateLimit: {
         enabled: true,
@@ -279,7 +283,6 @@ export class AuthController {
       plugins: [
         bearer(),
         openAPI({ disableDefaultReference: true }),
-        createOAuthProxy(baseURL, env.OAUTH_PROXY_SECRET),
         emailOTP({
           otpLength: 6, expiresIn: OTP_SECONDS, allowedAttempts: 5, storeOTP: 'hashed',
           async sendVerificationOTP({ email, otp, type }) {

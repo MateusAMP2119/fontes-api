@@ -11,7 +11,7 @@ test('unused Better Auth routes are unavailable, including authenticated callers
   assert.equal(signedIn.status, 200)
   const cookie = cookies(signedIn)
   const removed = [
-    'verify-email', 'sign-up/email', 'verify-password', 'send-verification-email', 'change-email',
+    'oauth-proxy-callback', 'error', 'verify-email', 'sign-up/email', 'verify-password', 'send-verification-email', 'change-email',
     'update-session', 'update-user', 'delete-user', 'delete-user/callback',
     'list-sessions', 'revoke-session', 'revoke-sessions', 'revoke-other-sessions',
     'link-social', 'list-accounts', 'unlink-account', 'refresh-token', 'get-access-token',

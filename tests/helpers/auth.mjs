@@ -7,7 +7,6 @@ import { betterAuth } from '${import.meta.resolve('better-auth')}';
 import { APIError, createAuthMiddleware } from '${import.meta.resolve('better-auth/api')}';
 import { memoryAdapter } from '${import.meta.resolve('better-auth/adapters/memory')}';
 import { bearer, openAPI, emailOTP } from '${import.meta.resolve('better-auth/plugins')}';
-import { createOAuthProxy } from '${new URL('../../worker/oauth.ts',import.meta.url).href}';
 const custom=${readFileSync(new URL('../../worker/openapi.json',import.meta.url),'utf8')};
 const OrganizationModel=class {constructor(store){this.store=store}async resumeFor(){return this.store?.activeOrganizationId ? {organizationId:this.store.activeOrganizationId}:null}};
 const OTP_SECONDS=600,RESET_SECONDS=3600;
