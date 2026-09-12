@@ -141,7 +141,7 @@ export class AuthController {
         '/sign-in/email-otp': 'Verify registration code',
         '/sign-in/email': 'Log in account',
         '/get-session': 'Read current session',
-        '/change-password': 'Set or change password (signed in)',
+        '/change-password': 'Set password',
         '/request-password-reset': 'Send password recovery email',
         '/reset-password/{token}': 'Open password recovery link',
         '/reset-password': 'Reset forgotten password',

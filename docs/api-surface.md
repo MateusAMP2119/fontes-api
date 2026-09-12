@@ -15,7 +15,7 @@ All paths below are relative to `/api/auth`.
 | POST | `/sign-in/social` | Start Google login. |
 | GET | `/callback/google` | Complete Google login. |
 | POST | `/sign-out` | End the current session. |
-| POST | `/set-password` | Set or change password (signed in). Requires a verified session and the current password, or an empty password for first setup. |
+| POST | `/set-password` | Set password. Requires a verified session and the current password, or an empty password for first setup. |
 | POST | `/request-password-reset` | Send password recovery email. Starts recovery without a session or current password. |
 | GET | `/reset-password/:token` | Open password recovery link. Checks the token and redirects to the app form; does not change the password. |
 | POST | `/reset-password` | Reset forgotten password. Uses a single-use recovery token and revokes existing sessions; no session or current password required. |
