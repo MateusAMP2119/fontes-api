@@ -45,6 +45,21 @@ test('root and docs remain public while the schema includes only retained API op
   assert.equal(response.status, 200)
   const schema = await response.json()
   assert.equal(Object.keys(schema.paths).length, 20)
+  assert.deepEqual(schema.tags.map(tag => tag.name), ['Authentication', 'Sessions', 'Passwords', 'Email verification', 'Onboarding', 'Briefing'])
+  const expectedTags = {
+    '/api/auth/sign-in/social': 'Authentication', '/api/auth/get-session': 'Sessions',
+    '/api/auth/change-password': 'Passwords', '/api/auth/verify-email': 'Email verification',
+    '/api/onboarding': 'Onboarding', '/api/briefing': 'Briefing',
+  }
+  for (const [path, tag] of Object.entries(expectedTags)) {
+    for (const operation of Object.values(schema.paths[path])) assert.deepEqual(operation.tags, [tag])
+  }
+  for (const operations of Object.values(schema.paths)) {
+    for (const operation of Object.values(operations)) {
+      assert.equal(operation.tags.length, 1)
+      assert.notEqual(operation.tags[0], 'Default')
+    }
+  }
   assert.deepEqual(schema.paths['/api/auth/callback/google'].get.parameters, [])
   for (const [path, operations] of Object.entries(schema.paths)) {
     if (path.startsWith('/api/auth/')) {

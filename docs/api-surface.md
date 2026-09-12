@@ -25,6 +25,12 @@ All paths below are relative to `/api/auth`.
 
 `AuthController.publicMethod` defines the public auth surface. Better Auth core and email OTP still provide server-side implementation, but unlisted HTTP routes are rejected before invoking their handlers. The organization and JWT plugins have been removed. OpenAPI generation is used only for the filtered documentation schema. The existing `session.activeOrganizationId` column is retained as a server-controlled additional field so workspace restoration and onboarding keep working. `auth.api.setPassword` is a server-only operation called by onboarding.
 
+## Callback URLs
+
+For `POST /api/auth/sign-in/social`, `callbackURL` is the destination after authentication. `https://app.fonteslabs.com/` is a valid production example; `http://localhost:5173/` is valid for local development. Absolute URLs must match a configured trusted origin. The app's popup flow generates `https://app.fonteslabs.com/google-auth.html?attempt=<uuid>&complete=1` automatically to notify its original window.
+
+Google's OAuth redirect URI is a separate server setting: `https://builder.fonteslabs.com/api/auth/callback/google`. That registered bridge forwards the provider response to `https://api.fonteslabs.com/api/auth/callback/google` before returning to the app's `callbackURL`.
+
 ## Onboarding and briefings
 
 | Method | Path | Purpose |

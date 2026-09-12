@@ -100,12 +100,19 @@ export class AuthController {
       if (!method || !(method in operations)) return []
       const operation = operations[method as keyof typeof operations]
       if (!operation) return []
+      operation.tags = [path.includes('password') ? 'Passwords'
+        : ['/get-session', '/sign-out'].includes(path) ? 'Sessions'
+        : path === '/verify-email' ? 'Email verification' : 'Authentication']
+      if (path === '/sign-in/social') {
+        operation.description = 'Start Google sign-in. callbackURL is the destination after authentication, for example https://app.fonteslabs.com/. Absolute URLs must use a trusted origin; http://localhost:5173/ is allowed for local development. The app popup supplies /google-auth.html with its attempt and complete query parameters automatically. The Google provider redirect URI is configured separately on the server.'
+      }
       if (path === '/callback/{id}' && operation.parameters) {
         operation.parameters = operation.parameters.filter(parameter => parameter.in !== 'path' || parameter.name !== 'id')
       }
       return [[fullPath.replace('{id}', 'google'), { [method]: operation }]]
     }))
     return Response.json({ ...generated, info: custom.info, servers: [{ url: '/' }],
+      tags: [...['Authentication', 'Sessions', 'Passwords', 'Email verification'].map(name => ({ name })), ...custom.tags],
       paths: { ...paths, ...custom.paths },
       components: { ...generated.components, securitySchemes: { ...generated.components.securitySchemes, ...custom.components.securitySchemes } },
     })
