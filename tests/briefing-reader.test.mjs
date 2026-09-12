@@ -12,7 +12,7 @@ test('retained briefing reader requires verified sessions and reads saved result
       return {payload: JSON.stringify(payload), generated_at: Date.now()/1000}
     }}}},
     AI: {run() {throw new Error('reader must not generate')}},
-  }, {session: async () => identity})
+  }, {bearerSession: async () => identity})
   const call = (suffix = '', method = 'GET') => controller.handle(new Request('https://api.fonteslabs.com/api/briefing'+suffix, {method}))
   assert.equal((await call()).status, 401)
   identity = {user: {emailVerified: false}}

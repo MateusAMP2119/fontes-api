@@ -4,21 +4,8 @@ import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 const source = readFileSync(new URL('../worker/controllers/ApiController.ts', import.meta.url), 'utf8').replace(/^import .*\n/gm, '')
 const js = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
-const imports = `import { AuthController } from '${new URL('./helpers/auth.mjs', import.meta.url).href}';\nimport briefing from '${new URL('../briefing/index.ts', import.meta.url).href}';\n`
+const imports = `import { BriefingController } from '${new URL('../worker/controllers/BriefingController.ts', import.meta.url).href}';\nimport { AuthController } from '${new URL('./helpers/auth.mjs', import.meta.url).href}';\nimport briefing from '${new URL('../briefing/index.ts', import.meta.url).href}';\n`
 const { ApiController } = await import('data:text/javascript;base64,' + Buffer.from(imports + js).toString('base64'))
-test('API dispatches briefing generation directly and keeps bearer authentication', async () => {
-  const env = { EBS_API_TOKEN: 'test-token' }
-  const api = new ApiController(env, {})
-  const call = (method, token, body) => api.handle(new Request('https://api.fonteslabs.com/api/briefing/generate', {
-    method, headers: { Authorization: `Bearer ${token}` }, ...(body ? { body } : {}),
-  }))
-  assert.equal((await call('POST', 'wrong')).status, 401)
-  assert.equal((await call('GET', 'test-token')).status, 405)
-  const response = await call('POST', 'test-token', '{}')
-  assert.equal(response.status, 400)
-  assert.equal((await response.json()).code, 'INVALID_BRIEFING_INTERVAL')
-})
-
 test('retired custom and auth routes return 404 before configuration or database access', async () => {
   const api = new ApiController({}, {})
   for (const path of ['/api/projects', '/api/auth/health', '/api/auth/organization-access/code', '/api/auth/organization-access/join', '/api/auth/organization/create', '/api/auth/token']) {
@@ -45,6 +32,11 @@ test('root and docs remain public while the schema includes only retained API op
   assert.equal(response.status, 200)
   const schema = await response.json()
   assert.equal(Object.keys(schema.paths).length, 20)
+  for (const path of ['/api/briefing', '/api/briefing/generate']) {
+    for (const operation of Object.values(schema.paths[path])) assert.deepEqual(operation.security, [{sessionBearer:[]}])
+  }
+  assert.equal(schema.components.securitySchemes.sessionBearer.scheme, 'bearer')
+  assert.equal(schema.components.securitySchemes.briefingBearer, undefined)
   assert.deepEqual(schema.tags.map(tag => tag.name), ['Authentication', 'Sessions', 'Passwords', 'Email verification', 'Onboarding', 'Briefing'])
   const expectedTags = {
     '/api/auth/sign-in/social': 'Authentication', '/api/auth/get-session': 'Sessions',
@@ -71,4 +63,62 @@ test('root and docs remain public while the schema includes only retained API op
   for (const path of ['/api/projects', '/api/auth/token', '/api/auth/organization/create', '/api/auth/sign-up/email', '/api/onboarding/availability']) assert.equal(schema.paths[path], undefined, path)
   const post = await configured.handle(new Request('https://api.fonteslabs.com/api/auth/openapi.json', {method:'POST'}))
   assert.equal(post.status, 405)
+})
+
+test('both briefing routes accept login session bearer tokens and reject missing, expired or revoked sessions', async () => {
+  const {fixture, cookies} = await import('./helpers/auth.mjs')
+  let reads = 0
+  const f = fixture({BRIEFING_DB: {prepare() {return {
+    bind() {return this}, async first() {reads++; return {payload: JSON.stringify({text:'Saved briefing'}), generated_at: Date.now()/1000}}, async run() {},
+  }}}})
+  const email = 'briefing@example.com'
+  await f.call('/email-otp/send-verification-otp', {email, type:'sign-in'})
+  await Promise.all(f.pending)
+  const login = await f.call('/sign-in/email-otp', {email, otp:f.env.messages[0].code})
+  assert.equal(login.status, 200)
+  const cookie = cookies(login)
+  const signedToken = login.headers.get('set-auth-token')
+  const {token} = await login.json()
+  assert.ok(token)
+  assert.ok(signedToken)
+  const api = new ApiController(f.env, {waitUntil() {}})
+  const request = (path, authorization, body) => new Request('https://api.fonteslabs.com'+path, {
+    method: path.endsWith('/generate') ? 'POST' : 'GET',
+    headers: {authorization, cookie, 'content-type':'application/json'},
+    ...(path.endsWith('/generate') ? {body:body ?? JSON.stringify({from:'2026-09-10T00:00:00Z',until:'2026-09-11T00:00:00Z'})} : {}),
+  })
+  const paths = ['/api/briefing', '/api/briefing/generate']
+  for (const path of paths) {
+    for (const authorization of ['', 'Bearer wrong', 'Bearer test-only-token', 'Basic '+token]) {
+      const result = await api.handle(request(path, authorization))
+      assert.equal(result.status, 401, path)
+      assert.equal(result.headers.get('www-authenticate'), 'Bearer')
+    }
+  }
+  assert.equal(reads, 0, 'invalid bearer never falls back to the valid cookie')
+  for (const path of paths) {
+    for (const value of [token, signedToken]) {
+      const result = await api.handle(request(path, 'Bearer '+value))
+      assert.equal(result.status, 200, path)
+      assert.equal((await result.json()).briefing.text, 'Saved briefing')
+    }
+  }
+  const invalid = await api.handle(request('/api/briefing/generate', 'Bearer '+token, '{}'))
+  assert.equal(invalid.status, 400)
+  assert.equal((await invalid.json()).code, 'INVALID_BRIEFING_INTERVAL')
+  const validReads = reads
+  f.env.store.user[0].emailVerified = false
+  for (const path of paths) assert.equal((await api.handle(request(path, 'Bearer '+token))).status, 403)
+  f.env.store.user[0].emailVerified = true
+  f.env.store.session[0].expiresAt = new Date(0)
+  for (const path of paths) assert.equal((await api.handle(request(path, 'Bearer '+token))).status, 401)
+  // Expiry may remove the row. A fresh login tests revocation independently.
+  await f.call('/email-otp/send-verification-otp', {email, type:'sign-in'})
+  await Promise.all(f.pending)
+  const fresh = await f.call('/sign-in/email-otp', {email, otp:f.env.messages.at(-1).code})
+  const freshToken = (await fresh.clone().json()).token
+  assert.ok(freshToken)
+  assert.equal((await f.call('/sign-out', {}, cookies(fresh))).status, 200)
+  for (const path of paths) assert.equal((await api.handle(request(path, 'Bearer '+freshToken))).status, 401)
+  assert.equal(reads, validReads, 'rejected sessions never reach briefing storage')
 })

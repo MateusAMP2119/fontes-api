@@ -45,7 +45,7 @@ cross-site workers.dev preview cannot rely on these same-site cookies.
 
 News remains on the independent engine API at `https://fontes-api.bymarreco.com`.
 Briefing generation runs inside this Worker at `POST /api/briefing/generate`,
-using a server-held bearer token and explicit `from`/`until` timestamps. Saved
+using a verified user session bearer token and explicit `from`/`until` timestamps. Saved
 briefings remain in the existing D1 database. See [briefings](docs/briefing.md).
 
 ## Development

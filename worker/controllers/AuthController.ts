@@ -1,7 +1,7 @@
 import { betterAuth } from 'better-auth'
 import { APIError } from 'better-auth/api'
 import { OrganizationModel } from '../models/OrganizationModel'
-import { openAPI, emailOTP } from 'better-auth/plugins'
+import { bearer, openAPI, emailOTP } from 'better-auth/plugins'
 import custom from '../openapi.json'
 import { createOAuthProxy } from '../oauth'
 import { sendTransactionalEmail, OTP_SECONDS, RESET_SECONDS, VERIFICATION_SECONDS } from '../email/send'
@@ -74,6 +74,14 @@ export class AuthController {
   }
 
   session(request: Request) { return this.auth.api.getSession({ headers: request.headers }) }
+  bearerSession(request: Request) {
+    if (!/^Bearer\s+\S+$/i.test(request.headers.get('authorization') ?? '')) return Promise.resolve(null)
+    const headers = new Headers(request.headers)
+    // An invalid bearer token must never fall back to a browser session cookie.
+    headers.delete('cookie')
+    return this.auth.api.getSession({ headers })
+  }
+
   static publicMethod(path: string): 'GET' | 'POST' | undefined {
     if (GET_PATHS.has(path)) return 'GET'
     if (POST_PATHS.has(path)) return 'POST'
@@ -201,6 +209,7 @@ export class AuthController {
         },
       },
       plugins: [
+        bearer(),
         openAPI({ disableDefaultReference: true }),
         createOAuthProxy(baseURL, env.OAUTH_PROXY_SECRET),
         emailOTP({

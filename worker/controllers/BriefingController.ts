@@ -1,19 +1,26 @@
+import briefing from '../../briefing/index.ts'
 import type { AuthController, WorkerEnv } from './AuthController'
 const FRESH_SECONDS = 900
 
 export class BriefingController {
   private env: WorkerEnv
-  private auth: Pick<AuthController, 'session'>
-  constructor(env: WorkerEnv, auth: Pick<AuthController, 'session'>) { this.env = env; this.auth = auth }
+  private auth: Pick<AuthController, 'bearerSession'>
+  constructor(env: WorkerEnv, auth: Pick<AuthController, 'bearerSession'>) { this.env = env; this.auth = auth }
 
   async handle(request: Request): Promise<Response> {
     const url = new URL(request.url)
     const path = url.pathname
-    if (path !== '/api/briefing') return new Response(null, { status: 404 })
-    if (request.method !== 'GET') return new Response(null, { status: 405, headers: { Allow: 'GET' } })
-    const session = await this.auth.session(request)
-    if (!session) return new Response(null, { status: 401 })
+    const generating = path === '/api/briefing/generate'
+    if (path !== '/api/briefing' && !generating) return new Response(null, { status: 404 })
+    const method = generating ? 'POST' : 'GET'
+    if (request.method !== method) return new Response(null, { status: 405, headers: { Allow: method } })
+    const session = await this.auth.bearerSession(request)
+    if (!session) return new Response(null, { status: 401, headers: { 'WWW-Authenticate': 'Bearer' } })
     if (!session.user.emailVerified) return new Response(null, { status: 403 })
+    if (generating) {
+      url.pathname = '/generate'
+      return briefing.fetch(new Request(url, request), this.env)
+    }
     if (url.search || request.body !== null) return Response.json({ code: 'BRIEFING_PARAMETERS_UNSUPPORTED' }, { status: 400 })
     // Scope is deliberately fixed. A request cannot supply workspace IDs, SQL or source URLs.
     if (!this.env.BRIEFING_DB) return Response.json({ code: 'BRIEFING_NOT_CONFIGURED' }, { status: 503 })

@@ -5,7 +5,7 @@ const source=readFileSync(new URL('../../worker/controllers/AuthController.ts',i
 const prelude=`import { betterAuth } from '${import.meta.resolve('better-auth')}';
 import { APIError } from '${import.meta.resolve('better-auth/api')}';
 import { memoryAdapter } from '${import.meta.resolve('better-auth/adapters/memory')}';
-import { openAPI, emailOTP } from '${import.meta.resolve('better-auth/plugins')}';
+import { bearer, openAPI, emailOTP } from '${import.meta.resolve('better-auth/plugins')}';
 import { createOAuthProxy } from '${new URL('../../worker/oauth.ts',import.meta.url).href}';
 const custom=${readFileSync(new URL('../../worker/openapi.json',import.meta.url),'utf8')};
 const OrganizationModel=class {constructor(store){this.store=store}async resumeFor(){return this.store?.activeOrganizationId ? {organizationId:this.store.activeOrganizationId}:null}};

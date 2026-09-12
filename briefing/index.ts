@@ -1,23 +1,16 @@
-import { timingSafeEqual } from 'node:crypto'
 import { readJson, validateFacts } from './facts.ts'
 import { BriefingStore } from './store.ts'
 import { parsePeriod } from './period.ts'
 import { MODEL, PROMPT_VERSION, modelRequest, composeModel, usageOf } from './llm.ts'
 
 export default {
-  async fetch(request: Request, env: Pick<AuthBindings, 'BRIEFING_DB' | 'AI' | 'NEWS_API_URL' | 'EBS_API_TOKEN' | 'CF_VERSION_METADATA'>): Promise<Response> {
+  async fetch(request: Request, env: Pick<AuthBindings, 'BRIEFING_DB' | 'AI' | 'NEWS_API_URL' | 'CF_VERSION_METADATA'>): Promise<Response> {
     const url = new URL(request.url)
     if ((url.pathname === '/' || url.pathname === '/health') && request.method === 'GET') {
       return Response.json({ service: 'fontes-api', status: 'ok', version: env.CF_VERSION_METADATA.id }, { headers: { 'Cache-Control': 'no-store' } })
     }
     if (url.pathname !== '/generate') return new Response(null, { status: 404 })
     if (request.method !== 'POST') return new Response(null, { status: 405, headers: { Allow: 'POST' } })
-    if (!env.EBS_API_TOKEN) return Response.json({ code: 'EBS_NOT_CONFIGURED' }, { status: 503 })
-    const expected = Buffer.from(`Bearer ${env.EBS_API_TOKEN}`)
-    const supplied = Buffer.from(request.headers.get('Authorization') ?? '')
-    if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
-      return Response.json({ code: 'EBS_UNAUTHORIZED' }, { status: 401, headers: { 'WWW-Authenticate': 'Bearer', 'Cache-Control': 'no-store' } })
-    }
     let period
     try {
       if (url.search) throw new Error('INVALID_BRIEFING_INTERVAL')
@@ -27,7 +20,7 @@ export default {
     } catch {
       return Response.json({ code: 'INVALID_BRIEFING_INTERVAL', message: 'from and until must be ISO 8601 timestamps with a timezone, at whole-second precision. The interval must be positive, at most 31 days, and end no later than now.' }, { status: 400 })
     }
-    // Authentication applies to both custom-domain and service-binding callers.
+    // Internal generator: BriefingController validates the bearer session before dispatch.
     const store = new BriefingStore(env.BRIEFING_DB, period)
     const now = () => Math.floor(Date.now() / 1000)
     const token = crypto.randomUUID()
@@ -71,4 +64,4 @@ export default {
       await store.release(token).catch(() => { console.error(JSON.stringify({ event: 'briefing_lease_release_failed' })) })
     }
   },
-} satisfies ExportedHandler<Pick<AuthBindings, 'BRIEFING_DB' | 'AI' | 'NEWS_API_URL' | 'EBS_API_TOKEN' | 'CF_VERSION_METADATA'>>
+} satisfies ExportedHandler<Pick<AuthBindings, 'BRIEFING_DB' | 'AI' | 'NEWS_API_URL' | 'CF_VERSION_METADATA'>>

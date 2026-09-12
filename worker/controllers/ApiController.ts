@@ -1,4 +1,3 @@
-import briefing from '../../briefing/index.ts'
 import { OnboardingController } from './OnboardingController'
 import { BriefingController } from './BriefingController'
 import { AuthController, type WorkerEnv } from './AuthController'
@@ -13,10 +12,6 @@ export class ApiController {
     if (path === '/') return Response.redirect(new URL('/api/auth/docs', request.url).toString(), 302)
     if (path.replace(/\/+$/, '') === '/api/auth/docs') return AuthController.page(request)
     if (path !== '/api/auth/openapi.json' && !AuthController.publicMethod(path) && !path.startsWith('/api/onboarding') && path !== '/api/briefing' && path !== '/api/briefing/generate') return new Response(null, { status: 404 })
-    if (path === '/api/briefing/generate') {
-      const url = new URL(request.url); url.pathname = '/generate'
-      return briefing.fetch(new Request(url, request), this.env)
-    }
     const env = this.env
     const base = URL.parse(env.BETTER_AUTH_URL ?? 'https://api.fonteslabs.com')
     if (!base || (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(base.hostname))) || (env.BETTER_AUTH_SECRET?.length ?? 0) < 32) {

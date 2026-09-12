@@ -40,7 +40,7 @@ function fixture(t) {
     return run
   } }
   const AI = { run: async () => Response.json(modelResponse()) }
-  return { sql, db, store: new BriefingStore(db, period), env: { BRIEFING_DB: db, AI, NEWS_API_URL: 'https://news.example', EBS_API_TOKEN: 'test-only-token', CF_VERSION_METADATA: { id: 'test-version' } } }
+  return { sql, db, store: new BriefingStore(db, period), env: { BRIEFING_DB: db, AI, NEWS_API_URL: 'https://news.example', CF_VERSION_METADATA: { id: 'test-version' } } }
 }
 function modelResponse() {
   return { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({
@@ -48,23 +48,7 @@ function modelResponse() {
     labels: [{ story_id: 12, label: 'Uma história' }],
   }) } }], usage: { prompt_tokens: 400, completion_tokens: 100, neurons: 6.3 } }
 }
-const generateRequest = (p = period) => new Request('https://briefing.internal/generate', { method: 'POST', headers: { Authorization: 'Bearer test-only-token', 'Content-Type': 'application/json' }, body: JSON.stringify(input(p)) })
-
-test('public generation rejects missing or invalid credentials before storage or inference', async t => {
-  const { env, sql } = fixture(t)
-  const upstream = t.mock.method(globalThis, 'fetch', async () => { throw new Error('must not fetch') })
-  const ai = t.mock.method(env.AI, 'run', async () => { throw new Error('must not infer') })
-  for (const host of ['ebs.fonteslabs.com', 'www.ebs.fonteslabs.com', 'briefing.internal']) {
-    for (const authorization of ['', 'Bearer wrong', 'Bearer test-only-tokem']) {
-      const response = await generator.fetch(new Request(`https://${host}/generate`, { method: 'POST', headers: { Authorization: authorization } }), env)
-      assert.equal(response.status, 401)
-    }
-  }
-  assert.equal((await generator.fetch(generateRequest(), { ...env, EBS_API_TOKEN: '' })).status, 503)
-  assert.equal(sql.prepare('SELECT count(*) AS n FROM briefing_windows').get().n, 0)
-  assert.equal(upstream.mock.callCount(), 0)
-  assert.equal(ai.mock.callCount(), 0)
-})
+const generateRequest = (p = period) => new Request('https://briefing.internal/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input(p)) })
 
 test('public liveness exposes only service and version without touching dependencies', async () => {
   for (const path of ['/', '/health']) {
@@ -78,7 +62,7 @@ test('public liveness exposes only service and version without touching dependen
 test('generation requires a bounded explicit JSON interval before storage or inference', async t => {
   const { env, sql } = fixture(t)
   const upstream = t.mock.method(globalThis, 'fetch', async () => Response.json(facts()))
-  const headers = { Authorization: 'Bearer test-only-token' }
+  const headers = {}
   for (const body of ['', '{}', ' ', 'x'.repeat(100000), JSON.stringify({ ...input(), extra: true }),
     JSON.stringify({ from: input().from }), JSON.stringify({ from: input().until, until: input().from }),
     JSON.stringify({ from: '2026-02-30T00:00:00Z', until: '2026-03-01T00:00:00Z' }),
@@ -304,7 +288,7 @@ test('equivalent timezone offsets share the same persistent interval cache', asy
     assert.equal(url.searchParams.get('until'), String(expected.until))
     return Response.json(facts(expected.until))
   })
-  const request = body => new Request('https://ebs.fonteslabs.com/generate', { method: 'POST', headers: { Authorization: 'Bearer test-only-token' }, body: JSON.stringify(body) })
+  const request = body => new Request('https://ebs.fonteslabs.com/generate', { method: 'POST', headers: {}, body: JSON.stringify(body) })
   const a = await generator.fetch(request(first), env)
   const b = await generator.fetch(request(second), env)
   assert.equal(a.status, 201)

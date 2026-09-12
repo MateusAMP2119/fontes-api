@@ -26,16 +26,16 @@
           "Briefing"
         ],
         "summary": "Read cached briefing",
-        "description": "Requires a verified session. No query parameters or body. Reads serve the latest valid general briefing from D1 without invoking AI. Responses include text, linked segments, story labels, counts, period, generation_id, and model/prompt metadata.",
+        "description": "Requires Authorization: Bearer <session-token> for a verified user. No query parameters or body. Reads the latest saved general briefing from D1 without invoking AI.",
         "responses": {
           "200": {
             "description": "Saved or cached briefing."
           },
           "401": {
-            "description": "Session required."
+            "description": "Missing, invalid, expired or revoked session bearer token."
           },
           "403": {
-            "description": "Verified email or trusted Origin required."
+            "description": "Verified email required."
           },
           "404": {
             "description": "No briefing generated yet."
@@ -55,10 +55,7 @@
         },
         "security": [
           {
-            "sessionCookie": []
-          },
-          {
-            "secureSessionCookie": []
+            "sessionBearer": []
           }
         ]
       }
@@ -69,13 +66,13 @@
           "Briefing"
         ],
         "summary": "Generate  new briefing",
-        "description": "Requires the server-held EBS_API_TOKEN bearer credential. Generates inside fontes-api with Gemma 4 for an explicit interval of at most 31 days. Exact interval results are reused from D1. Inputs, model response and usage are retained in generation history. No separate Worker or service binding.",
+        "description": "Requires Authorization: Bearer <session-token> for a verified user. Generates a briefing for an explicit interval of at most 31 days. Exact interval results are reused from D1. Inputs, model response and usage are retained in generation history.",
         "responses": {
           "200": {
             "description": "Saved or cached briefing."
           },
           "401": {
-            "description": "Missing or invalid bearer token."
+            "description": "Missing, invalid, expired or revoked session bearer token."
           },
           "404": {
             "description": "No briefing generated yet."
@@ -94,11 +91,14 @@
           },
           "400": {
             "description": "Missing or invalid explicit interval."
+          },
+          "403": {
+            "description": "Verified email required."
           }
         },
         "security": [
           {
-            "briefingBearer": []
+            "sessionBearer": []
           }
         ],
         "requestBody": {
@@ -429,10 +429,10 @@
         "name": "__Secure-better-auth.session_token",
         "description": "HTTPS session; managed by the browser."
       },
-      "briefingBearer": {
+      "sessionBearer": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Server-held EBS_API_TOKEN, retained during consolidation."
+        "description": "Session token returned by sign-in (token), GET /api/auth/get-session (session.token), or the set-auth-token response header. Requires a live session for a verified user; expires or is revoked with the session."
       }
     }
   }

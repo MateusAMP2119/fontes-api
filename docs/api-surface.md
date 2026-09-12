@@ -40,8 +40,8 @@ Google's OAuth redirect URI is a separate server setting: `https://builder.fonte
 | POST | `/api/onboarding/password` | Set the first password. |
 | POST | `/api/onboarding/invite` | Create or send a token-based invitation. |
 | POST | `/api/onboarding/join` | Accept a token-based invitation. |
-| GET | `/api/briefing` | Read the latest saved briefing with a verified session. |
-| POST | `/api/briefing/generate` | Generate new briefing results using the server bearer credential. |
+| GET | `/api/briefing` | Read the latest saved briefing with a verified session bearer token. |
+| POST | `/api/briefing/generate` | Generate new briefing results using a verified session bearer token. |
 
 See [briefing contract](briefing.md) for generation inputs and storage behavior.
 
