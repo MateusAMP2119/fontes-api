@@ -25,7 +25,7 @@
         "tags": [
           "Briefing"
         ],
-        "summary": "Read the saved general briefing",
+        "summary": "Read cached briefing",
         "description": "Requires a verified session. No query parameters or body. Reads serve the latest valid general briefing from D1 without invoking AI. Responses include text, linked segments, story labels, counts, period, generation_id, and model/prompt metadata.",
         "responses": {
           "200": {
@@ -68,7 +68,7 @@
         "tags": [
           "Briefing"
         ],
-        "summary": "Generate a general briefing on request",
+        "summary": "Generate  new briefing",
         "description": "Requires the server-held EBS_API_TOKEN bearer credential. Generates inside fontes-api with Gemma 4 for an explicit interval of at most 31 days. Exact interval results are reused from D1. Inputs, model response and usage are retained in generation history. No separate Worker or service binding.",
         "responses": {
           "200": {
