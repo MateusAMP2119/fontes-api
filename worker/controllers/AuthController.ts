@@ -100,16 +100,24 @@ export class AuthController {
       if (!session?.user.emailVerified) return Response.json({ message: 'Confirmação de email necessária.' }, { status: 401 })
       let body
       try { body = await request.json() as Record<string, unknown> } catch { return new Response(null, { status: 400 }) }
-      if (!body || typeof body.password !== 'string' || typeof body['new-password'] !== 'string'
-        || (body.revokeOtherSessions !== undefined && typeof body.revokeOtherSessions !== 'boolean')) return Response.json({ message: 'Palavra-passe atual e nova obrigatórias.' }, { status: 400 })
+      if (!body || typeof body.password !== 'string' || typeof body['new-password'] !== 'string') return Response.json({ message: 'Palavra-passe atual e nova obrigatórias.' }, { status: 400 })
       if (body.password === '') {
         const created = new Date(session.session.createdAt).getTime()
         if (!Number.isFinite(created) || Date.now() - created > 15 * 60 * 1000) return Response.json({ message: 'Nova autenticação necessária.', step: 'email' }, { status: 401 })
-        return this.auth.api.setPassword({ headers: request.headers, body: { newPassword: body['new-password'] }, asResponse: true })
+        const setup = await this.auth.api.setPassword({ headers: request.headers, body: { newPassword: body['new-password'] }, asResponse: true })
+        if (!setup.ok) return setup
       }
       const url = new URL(request.url)
       url.pathname = '/api/auth/change-password'
-      return this.auth.handler(new Request(url, { method: 'POST', headers: request.headers, body: JSON.stringify({ currentPassword: body.password, newPassword: body['new-password'], revokeOtherSessions: body.revokeOtherSessions }) }))
+      const change = { currentPassword: body.password || body['new-password'], newPassword: body['new-password'], revokeOtherSessions: true }
+      // Initial setup has already passed authentication and freshness checks.
+      const response = body.password === ''
+        ? await this.auth.api.changePassword({ headers: request.headers, body: change, asResponse: true })
+        : await this.auth.handler(new Request(url, { method: 'POST', headers: request.headers, body: JSON.stringify(change) }))
+      if (!response.ok) return response
+      const result = await response.json() as { token: string; user: unknown }
+      const refreshed = await this.auth.api.getSession({ headers: new Headers({ authorization: `Bearer ${result.token}` }) })
+      return Response.json({ ...result, session: refreshed?.session }, { headers: response.headers })
     }
     return this.auth.handler(request)
   }
@@ -152,9 +160,17 @@ export class AuthController {
           schema.properties['new-password'] = schema.properties.newPassword
           delete schema.properties.currentPassword
           delete schema.properties.newPassword
-          schema.required = schema.required?.map(name => name === 'currentPassword' ? 'password' : name === 'newPassword' ? 'new-password' : name)
+          delete schema.properties.revokeOtherSessions
+          schema.required = schema.required?.map(name => name === 'currentPassword' ? 'password' : name === 'newPassword' ? 'new-password' : name).filter(name => name !== 'revokeOtherSessions')
         }
-        operation.description = 'Requires a verified session and password. Use an empty string only when no password exists.'
+        const responseSchema = operation.responses?.['200']?.content?.['application/json']?.schema
+        const sessionSchema = generated.paths['/get-session']?.get?.responses?.['200']?.content?.['application/json']?.schema?.properties?.session
+        if (responseSchema?.properties) {
+          responseSchema.properties.token = { type: 'string', description: 'Replacement session token.' }
+          if (sessionSchema) responseSchema.properties.session = sessionSchema
+          responseSchema.required = ['token', 'session', 'user']
+        }
+        operation.description = 'Requires a verified session and password. Use an empty string only when no password exists. Replaces all sessions and returns the new token, session and user.'
       }
       if (path === '/get-session') operation.description = 'Returns the current session and user, or null.'
       operation.tags = [['/get-session', '/sign-out'].includes(path) ? 'Sessions'
