@@ -10,8 +10,8 @@ All paths below are relative to `/api/auth`.
 | --- | --- | --- |
 | GET | `/get-session` | Read the cookie-backed session. |
 | POST | `/sign-in/email` | Password login. |
-| POST | `/email-otp/send-verification-otp` | Send a login code. |
-| POST | `/sign-in/email-otp` | Verify the login code and create a session. |
+| POST | `/email-otp/send-verification-otp` | Send a registration code. |
+| POST | `/sign-in/email-otp` | Verify a new account and create its first session. |
 | POST | `/sign-in/social` | Start Google login. |
 | GET | `/callback/google` | Complete Google login. |
 | GET | `/oauth-proxy-callback` | Complete local OAuth handoff. |
@@ -24,6 +24,8 @@ All paths below are relative to `/api/auth`.
 | GET | `/verify-email` | Complete verification links, including previously issued links. |
 
 `AuthController.publicMethod` defines the public auth surface. Better Auth core and email OTP still provide server-side implementation, but unlisted HTTP routes are rejected before invoking their handlers. The organization and JWT plugins have been removed. OpenAPI generation is used only for the filtered documentation schema. The existing `session.activeOrganizationId` column is retained as a server-controlled additional field so workspace restoration and onboarding keep working. `auth.api.setPassword` is a server-only operation called by onboarding.
+
+Email codes are registration-only. Existing accounts use password or Google; unfinished accounts without a password can use password recovery.
 
 ## Callback URLs
 

@@ -34,7 +34,7 @@ test('root and docs remain public while the schema includes only retained API op
   assert.equal(Object.keys(schema.paths).length, 20)
   assert.deepEqual(schema.security, [])
   for (const path of ['/api/auth/email-otp/send-verification-otp', '/api/auth/sign-in/email-otp', '/api/auth/sign-in/email', '/api/auth/sign-in/social']) assert.deepEqual(schema.paths[path].post.security, [], path)
-  assert.equal(schema.paths['/api/auth/sign-in/email-otp'].post.summary, 'Create user or sign in with code')
+  assert.equal(schema.paths['/api/auth/sign-in/email-otp'].post.summary, 'Verify registration code')
   for (const operations of Object.values(schema.paths)) {
     for (const operation of Object.values(operations)) {
       for (const requirement of operation.security ?? []) {
@@ -91,6 +91,7 @@ test('both briefing routes accept login session bearer tokens and reject missing
   const {token} = await login.json()
   assert.ok(token)
   assert.ok(signedToken)
+  await f.auth.setPassword(f.request('/unused', undefined, cookie), 'test-briefing-password')
   const api = new ApiController(f.env, {waitUntil() {}})
   const request = (path, authorization, body) => new Request('https://api.fonteslabs.com'+path, {
     method: path.endsWith('/generate') ? 'POST' : 'GET',
@@ -122,10 +123,8 @@ test('both briefing routes accept login session bearer tokens and reject missing
   f.env.store.user[0].emailVerified = true
   f.env.store.session[0].expiresAt = new Date(0)
   for (const path of paths) assert.equal((await api.handle(request(path, 'Bearer '+token))).status, 401)
-  // Expiry may remove the row. A fresh login tests revocation independently.
-  await f.call('/email-otp/send-verification-otp', {email, type:'sign-in'})
-  await Promise.all(f.pending)
-  const fresh = await f.call('/sign-in/email-otp', {email, otp:f.env.messages.at(-1).code})
+  // Expiry may remove the row. Password login tests revocation independently.
+  const fresh = await f.call('/sign-in/email', {email, password:'test-briefing-password'})
   const freshToken = (await fresh.clone().json()).token
   assert.ok(freshToken)
   assert.equal((await f.call('/sign-out', {}, cookies(fresh))).status, 200)

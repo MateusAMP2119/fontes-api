@@ -55,3 +55,69 @@ test('session workspace field survives plugin removal and cannot be supplied by 
   assert.equal((await f.call('/sign-out', {}, cookie)).status, 200)
   assert.equal(await (await f.call('/get-session', undefined, cookie)).json(), null)
 })
+
+test('email codes create only new accounts, never another session for an existing user', async () => {
+  const f = fixture()
+  const email = 'register-only@example.com'
+  for (const type of ['email-verification','forget-password','change-email']) {
+    const rejected=fixture()
+    assert.equal((await rejected.call('/email-otp/send-verification-otp', {email,type})).status,400)
+    assert.equal(rejected.env.messages.length,0)
+  }
+  assert.equal(f.env.messages.length,0)
+  assert.equal((await f.call('/email-otp/send-verification-otp', {email,type:'sign-in'})).status,200)
+  await Promise.all(f.pending)
+  const otp = f.env.messages[0].code
+  const created = await f.call('/sign-in/email-otp',{email,otp})
+  assert.equal(created.status,200)
+  assert.ok((await created.clone().json()).token)
+  const existing = async () => {
+    f.env.store.rateLimit.length=0 // Isolate authorization from the send-code rate limit.
+    for (const [path,body] of [['/email-otp/send-verification-otp',{email:email.toUpperCase(),type:'sign-in'}],['/sign-in/email-otp',{email,otp}]]) {
+      const response = await f.call(path,body)
+      assert.equal(response.status,400)
+      assert.equal((await response.json()).code,'REGISTRATION_ACCOUNT_EXISTS')
+      assert.equal(response.headers.get('set-auth-token'),null)
+    }
+  }
+  await existing() // Even an unfinished account without a password cannot use OTP login.
+  await f.auth.setPassword(f.request('/unused',undefined,cookies(created)),'registration-password')
+  await existing()
+  f.env.store.user[0].emailVerified = false
+  await existing()
+  assert.equal(f.env.messages.length,1)
+  assert.equal(f.env.store.session.length,1)
+  f.env.store.user[0].emailVerified = true
+  assert.equal((await f.call('/sign-in/email',{email,password:'registration-password'})).status,200)
+})
+
+test('an account created during registration verification cannot receive an OTP login session', async () => {
+  const f=fixture(), email='registration-race@example.com'
+  await f.call('/email-otp/send-verification-otp',{email,type:'sign-in'})
+  await Promise.all(f.pending)
+  const context=await f.auth.auth.$context
+  await context.internalAdapter.createUser({email,name:'Existing Google user',emailVerified:true})
+  const find=context.internalAdapter.findUserByEmail.bind(context.internalAdapter)
+  let lookups=0
+  context.internalAdapter.findUserByEmail=async (...args)=>++lookups===1?null:find(...args)
+  const response=await f.call('/sign-in/email-otp',{email,otp:f.env.messages[0].code})
+  assert.equal(response.status,400)
+  assert.equal((await response.json()).code,'REGISTRATION_ACCOUNT_EXISTS')
+  assert.equal(f.env.store.session.length,0)
+})
+
+test('an unfinished registration can establish a password through email recovery', async () => {
+  const f=fixture(),email='unfinished@example.com'
+  await f.call('/email-otp/send-verification-otp',{email,type:'sign-in'})
+  await Promise.all(f.pending)
+  const created=await f.call('/sign-in/email-otp',{email,otp:f.env.messages[0].code})
+  await f.call('/sign-out',{},cookies(created))
+  assert.equal((await f.call('/request-password-reset',{email,redirectTo:'https://app.fonteslabs.com/reset-password'})).status,200)
+  await Promise.all(f.pending)
+  const reset=f.env.messages.find(message=>message.kind==='reset-link')
+  const redirect=await f.auth.handle(new Request(reset.url))
+  const token=new URL(redirect.headers.get('location')).searchParams.get('token')
+  assert.equal((await f.call('/reset-password',{token,newPassword:'recovered-password'})).status,200)
+  assert.equal((await f.call('/sign-in/email',{email,password:'recovered-password'})).status,200)
+  assert.equal(f.env.store.user.length,1)
+})

@@ -1,5 +1,5 @@
 import { betterAuth } from 'better-auth'
-import { APIError } from 'better-auth/api'
+import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { OrganizationModel } from '../models/OrganizationModel'
 import { bearer, openAPI, emailOTP } from 'better-auth/plugins'
 import custom from '../openapi.json'
@@ -113,13 +113,18 @@ export class AuthController {
         : []
       if (path === '/get-session') security.push({})
       const labels: Record<string, string> = {
-        '/email-otp/send-verification-otp': 'Send sign-in code',
-        '/sign-in/email-otp': 'Create user or sign in with code',
+        '/email-otp/send-verification-otp': 'Send registration code',
+        '/sign-in/email-otp': 'Verify registration code',
         '/sign-in/email': 'Sign in with password',
         '/get-session': 'Read current session',
       }
-      if (path === '/email-otp/send-verification-otp') operation.description = 'Sends a six-digit sign-in code, valid for 10 minutes.'
-      if (path === '/sign-in/email-otp') operation.description = 'Creates an account if needed and returns a session token.'
+      const codePurpose = operation.requestBody?.content?.['application/json']?.schema?.properties?.type
+      if (path === '/email-otp/send-verification-otp' && codePurpose) {
+        codePurpose.enum = ['sign-in']
+        codePurpose.description = 'Registration code purpose.'
+      }
+      if (path === '/email-otp/send-verification-otp') operation.description = 'Sends a six-digit code for a new account, valid for 10 minutes.'
+      if (path === '/sign-in/email-otp') operation.description = 'Verifies a new account and returns its first session token. Existing accounts use password or Google.'
       if (path === '/sign-in/email') operation.description = 'Returns a session token for an existing account.'
       if (path === '/get-session') operation.description = 'Returns the current session and user, or null.'
       operation.tags = [path.includes('password') ? 'Passwords'
@@ -167,6 +172,8 @@ export class AuthController {
 
   private static createAuth(env: WorkerEnv, waitUntil: (promise: Promise<unknown>) => void) {
     const baseURL = env.BETTER_AUTH_URL ?? BASE_URL
+    const newRegistrations = new Set<string>()
+    const existingAccount = () => new APIError('BAD_REQUEST', { code: 'REGISTRATION_ACCOUNT_EXISTS', message: 'Email já registado. Início de sessão com palavra-passe ou Google; recuperação de acesso disponível.' })
     return betterAuth({
       appName: 'Fontes',
       baseURL,
@@ -222,6 +229,16 @@ export class AuthController {
           '/request-password-reset': { window: 60 * 60, max: 5 },
         },
       },
+      hooks: {
+        before: createAuthMiddleware(async ctx => {
+          if (!['/email-otp/send-verification-otp', '/sign-in/email-otp'].includes(ctx.path ?? '')) return
+          if (ctx.path === '/email-otp/send-verification-otp' && ctx.body?.type !== 'sign-in') {
+            throw new APIError('BAD_REQUEST', { code: 'REGISTRATION_CODE_ONLY', message: 'Código disponível apenas para registo.' })
+          }
+          const email = typeof ctx.body?.email === 'string' ? ctx.body.email.toLowerCase() : ''
+          if (email && await ctx.context.internalAdapter.findUserByEmail(email)) throw existingAccount()
+        }),
+      },
       plugins: [
         bearer(),
         openAPI({ disableDefaultReference: true }),
@@ -243,6 +260,9 @@ export class AuthController {
             },
           },
           create: {
+            after: async (user, ctx) => {
+              if (ctx?.path === '/sign-in/email-otp') newRegistrations.add(user.id)
+            },
             before: async (user) => {
               if (user.username !== undefined && !AuthController.validUsername(user.username)) {
                 throw new APIError('BAD_REQUEST', { message: 'Nome de utilizador inválido.' })
@@ -254,7 +274,10 @@ export class AuthController {
         session: {
           create: {
             // Resume the saved workspace if membership is still valid.
-            before: async (session) => {
+            before: async (session, ctx) => {
+              // Only the account created by this registration may receive an OTP session.
+              // Also rejects an account created concurrently after the initial lookup.
+              if (ctx?.path === '/sign-in/email-otp' && !newRegistrations.delete(session.userId)) throw existingAccount()
               const member = await new OrganizationModel(env.APP_DB).resumeFor(session.userId)
               return { data: { ...session, activeOrganizationId: member?.organizationId ?? null } }
             },

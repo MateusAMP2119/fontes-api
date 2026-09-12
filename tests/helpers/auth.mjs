@@ -3,7 +3,7 @@ import ts from 'typescript'
 // Run the production auth configuration with only database and email transport replaced.
 const source=readFileSync(new URL('../../worker/controllers/AuthController.ts',import.meta.url),'utf8').replace(/^import .*\n/gm,'').replace('database: env.APP_DB,','database: memoryAdapter(env.store),')
 const prelude=`import { betterAuth } from '${import.meta.resolve('better-auth')}';
-import { APIError } from '${import.meta.resolve('better-auth/api')}';
+import { APIError, createAuthMiddleware } from '${import.meta.resolve('better-auth/api')}';
 import { memoryAdapter } from '${import.meta.resolve('better-auth/adapters/memory')}';
 import { bearer, openAPI, emailOTP } from '${import.meta.resolve('better-auth/plugins')}';
 import { createOAuthProxy } from '${new URL('../../worker/oauth.ts',import.meta.url).href}';

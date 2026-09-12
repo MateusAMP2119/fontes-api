@@ -89,8 +89,8 @@ releasing this API, then release the frontend. This additive migration creates
 onboarding progress/preferences and invitation records. It does not replace the
 existing Better Auth or project schema. No migration is applied by the build.
 
-The email OTP plugin supports six-digit login codes (10-minute expiry, hashed
-storage, five attempts). Password login, change and recovery remain available alongside OTP and Google.
+The email OTP plugin supports six-digit registration codes (10-minute expiry, hashed
+storage, five attempts). Existing accounts use password or Google login. Email codes cannot create another session for an existing account. Password recovery also supports unfinished accounts without a password.
 
 `GET /api/onboarding` returns the verified user's workspace, profile, default
 project, preferences and completion state. `POST /api/onboarding` accepts a full
