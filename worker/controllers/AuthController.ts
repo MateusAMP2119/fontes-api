@@ -142,7 +142,7 @@ export class AuthController {
         '/sign-in/email': 'Log in account',
         '/get-session': 'Read current session',
         '/change-password': 'Set password',
-        '/request-password-reset': 'Send password recovery email',
+        '/request-password-reset': 'Send recovery email',
         '/reset-password/{token}': 'Open password recovery link',
         '/reset-password': 'Reset forgotten password',
       }
