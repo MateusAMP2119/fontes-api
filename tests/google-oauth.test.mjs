@@ -1,24 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { betterAuth } from 'better-auth'
-import { memoryAdapter } from 'better-auth/adapters/memory'
-import { createOAuthProxy } from '../worker/oauth.ts'
+import { fixture as authFixture } from './helpers/auth.mjs'
 
 const cloud = 'https://api.fonteslabs.com'
 const local = 'http://localhost:8788'
 const callback = 'https://builder.fonteslabs.com/api/auth/callback/google'
 const proxySecret = 'test-only-shared-proxy-secret-at-least-32-characters'
 function fixture(origin) {
-  const database = { user: [], account: [], session: [], verification: [] }
-  const auth = betterAuth({
-    baseURL: origin,
-    secret: `test-only-session-secret-for-${origin}-never-production`,
-    database: memoryAdapter(database),
-    trustedOrigins: [cloud, local, 'http://localhost:5173', 'https://app.fonteslabs.com'],
-    socialProviders: { google: { clientId: 'test-client', clientSecret: 'test-secret', redirectURI: callback } },
-    plugins: [createOAuthProxy(origin, proxySecret)],
-  })
-  return { auth, database }
+  const f = authFixture({BETTER_AUTH_URL: origin, GOOGLE_REDIRECT_URI: callback, OAUTH_PROXY_SECRET: proxySecret})
+  return {auth: {handler: request => f.auth.handle(request), $context: f.auth.auth.$context}, database: f.env.store}
 }
 async function start(auth, origin, frontend) {
   const response = await auth.handler(new Request(`${origin}/api/auth/sign-in/social`, {

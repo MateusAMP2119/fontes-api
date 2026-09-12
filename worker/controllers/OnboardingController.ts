@@ -24,7 +24,7 @@ export class OnboardingController {
 
   async handle(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname
-    if (!['/api/onboarding', '/api/onboarding/invite', '/api/onboarding/join', '/api/onboarding/invitation', '/api/onboarding/password', '/api/onboarding/availability'].includes(path)) return new Response(null, { status: 404 })
+    if (!['/api/onboarding', '/api/onboarding/invite', '/api/onboarding/join', '/api/onboarding/password'].includes(path)) return new Response(null, { status: 404 })
     if (request.method !== 'GET' && request.method !== 'POST') return new Response(null, { status: 405 })
     if (request.method === 'POST' && !AuthController.isTrustedOrigin(request.headers.get('origin'), this.env)) return new Response(null, { status: 403 })
     const session = await this.auth.session(request)
@@ -43,15 +43,6 @@ export class OnboardingController {
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('body')
       body = parsed as Record<string, unknown>
     } catch { return Response.json({ message: 'Pedido inválido.' }, { status: 400 }) }
-    if (path === '/api/onboarding/availability') {
-      if (typeof body.slug !== 'string' || !/^[a-z0-9][a-z0-9-]{2,47}$/.test(body.slug)
-        || (body.organizationId !== undefined && typeof body.organizationId !== 'string')) return Response.json({ message: 'URL inválido.' }, { status: 400 })
-      // Exact indexed lookup only. Advisory checks never reserve or create a workspace.
-      const collision = await db.prepare(`SELECT o.id FROM organization o WHERE o.slug = ? AND NOT EXISTS (
-        SELECT 1 FROM member m WHERE m.organizationId = o.id AND o.id = ? AND m.userId = ? AND m.role IN ('owner', 'admin')
-      )`).bind(body.slug, body.organizationId ?? '', userId).first()
-      return Response.json({ available: !collision }, { headers: { 'cache-control': 'private, no-store' } })
-    }
     if (path === '/api/onboarding/password') {
       const created = new Date(session.session.createdAt).getTime()
       if (!Number.isFinite(created) || Date.now() - created > 15 * 60 * 1000) return Response.json({ message: 'Nova autenticação necessária para definir a palavra-passe.', step: 'email' }, { status: 401 })
@@ -61,13 +52,12 @@ export class OnboardingController {
       catch { return Response.json({ message: 'Não foi possível definir a palavra-passe. A recuperação de acesso permite definir uma nova.', step: 'password' }, { status: 400 }) }
       return Response.json(await this.bootstrap(userId, session.session.activeOrganizationId))
     }
-    if (path === '/api/onboarding/join' || path === '/api/onboarding/invitation') {
+    if (path === '/api/onboarding/join') {
       if (typeof body.token !== 'string' || !tokenPattern.test(body.token)) return new Response(null, { status: 400 })
       const hash = await tokenHash(body.token)
       const invite = await db.prepare("SELECT i.organizationId, o.name FROM onboardingInvite i JOIN organization o ON o.id = i.organizationId WHERE i.tokenHash = ? AND i.expiresAt > ? AND (i.email IS NULL OR i.email = ?) AND EXISTS (SELECT 1 FROM member m WHERE m.organizationId = i.organizationId AND m.userId = i.creatorId AND m.role IN ('owner', 'admin'))")
         .bind(hash, Date.now(), session.user.email.toLowerCase()).first<{ organizationId: string; name: string }>()
       if (!invite) return Response.json({ message: 'O convite expirou ou pertence a outro email.' }, { status: 403 })
-      if (path === '/api/onboarding/invitation') return Response.json({ name: invite.name, role: 'member' })
       const credentials = await this.credentials(userId)
       if (credentials.passwordRequired) return Response.json({ message: 'Palavra-passe por definir.', step: 'password' }, { status: 400 })
       await db.batch([

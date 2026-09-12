@@ -88,11 +88,10 @@ test('profile image persists and explicit removal clears it',async()=>{
  assert.equal((await (await f.call()).json()).profile.image,null)
  assert.equal((await f.call('',{...f.setup,revision:3,profileImage:'javascript:bad'})).status,400);f.sql.close()
 })
-test('invitation review never joins; member setup cannot rename a workspace',async()=>{
+test('member setup cannot rename a workspace',async()=>{
  const f=fixture();await f.call('',f.setup);const token='cd'.repeat(32)
  await f.call('/invite',{token,email:'v@example.com',organizationId:'onboarding_u'})
  f.identity({user:{id:'v',email:'v@example.com',emailVerified:true},session:{id:'sv',activeOrganizationId:null}})
- const review=await f.call('/invitation',{token});assert.equal(review.status,200);assert.equal((await review.json()).name,'Fontes')
  assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM member WHERE userId='v'").get().n,0)
  await f.call('/join',{token})
  const state=await (await f.call()).json();assert.equal(state.canInvite,false);assert.equal(state.canEditWorkspace,false)
@@ -101,11 +100,10 @@ test('invitation review never joins; member setup cannot rename a workspace',asy
  assert.equal((await f.call('/invite',{token:'ef'.repeat(32),email:null,organizationId:'onboarding_u'})).status,403)
  f.sql.close()
 })
-test('creator revocation invalidates invitation review and acceptance',async()=>{
+test('creator revocation invalidates invitation acceptance',async()=>{
  const f=fixture();await f.call('',f.setup);const token='ef'.repeat(32)
  await f.call('/invite',{token,email:null,organizationId:'onboarding_u'})
  f.sql.exec("DELETE FROM member WHERE userId='u'")
- assert.equal((await f.call('/invitation',{token})).status,403)
  assert.equal((await f.call('/join',{token})).status,403);f.sql.close()
 })
 
@@ -127,22 +125,15 @@ test('queued setup cannot modify a different active workspace',async()=>{
  assert.equal(f.sql.prepare("SELECT name FROM organization WHERE id='onboarding_u'").get().name,'Fontes');f.sql.close()
 })
 
-test('availability uses exact URLs, authenticates and never creates workspace data',async()=>{
- const f=fixture()
- assert.deepEqual(await (await f.call('/availability',{slug:'fontes-team'})).json(),{available:true})
- assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM organization').get().n,0)
- assert.equal((await f.call('/availability',{slug:'fo%'})).status,400)
- assert.equal((await f.call('/availability',{slug:'fontes-team'},'https://evil.example')).status,403)
- await f.call('',f.setup)
- assert.deepEqual(await (await f.call('/availability',{slug:'fontes-team'})).json(),{available:false})
- assert.deepEqual(await (await f.call('/availability',{slug:'fontes-tea'})).json(),{available:true})
- assert.deepEqual(await (await f.call('/availability',{slug:'fontes-team',organizationId:'onboarding_u'})).json(),{available:true})
- f.identity({user:{id:'v',email:'v@example.com',emailVerified:true},session:{id:'sv'}})
- assert.deepEqual(await (await f.call('/availability',{slug:'fontes-team',organizationId:'onboarding_u'})).json(),{available:false})
- f.identity(null);assert.equal((await f.call('/availability',{slug:'fontes-team'})).status,401)
- f.sql.close()
+test('retired onboarding routes return 404 before session or database work',async()=>{
+ const controller=new OnboardingController({}, {session:async()=>{throw new Error('must not authenticate')}})
+ for (const path of ['/availability','/invitation']) {
+  for (const method of ['GET','POST']) {
+   const response=await controller.handle(new Request('https://api.fonteslabs.com/api/onboarding'+path,{method}))
+   assert.equal(response.status,404)
+  }
+ }
 })
-
 
 test('fresh sessions restore an accepted workspace, including joins with no further setup', async () => {
  const f = fixture()

@@ -23,16 +23,4 @@ export class ProjectModel {
     `).bind(userId, organizationId, userId).all<Project>()
     return results.length ? results.filter(project => project.id !== null) : null
   }
-
-  async isMember(userId: string, organizationId: string) {
-    return !!await this.db.prepare('SELECT 1 FROM member WHERE userId = ? AND organizationId = ?')
-      .bind(userId, organizationId).first()
-  }
-
-  async create(userId: string, organizationId: string, name: string, visibility: Project['visibility']) {
-    const project: Project = { id: crypto.randomUUID(), ownerId: userId, organizationId, name, visibility, createdAt: new Date().toISOString() }
-    await this.db.prepare('INSERT INTO project (id, organizationId, name, createdAt, ownerId, visibility) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(project.id, organizationId, name, project.createdAt, userId, visibility).run()
-    return project
-  }
 }

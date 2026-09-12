@@ -1,6 +1,6 @@
 # Fontes API
 
-TypeScript Cloudflare Worker with Better Auth, D1, organizations, projects and Scalar docs.
+TypeScript Cloudflare Worker for app authentication, onboarding and briefings, backed by Better Auth and D1.
 
 ## Cloudflare
 
@@ -24,8 +24,8 @@ npm run deploy
 Use a random production secret of at least 32 characters. Authorize
 `conta@fonteslabs.com` for `AUTH_EMAIL` and register
 `https://builder.fonteslabs.com/api/auth/callback/google` with Google.
-The canonical API origin is `https://api.fonteslabs.com`; it serves `/api/auth/*`
-and `/api/projects`. The legacy `builder.fonteslabs.com` callback host is also attached as a custom domain
+The canonical API origin is `https://api.fonteslabs.com`; its supported routes are
+listed in [API surface](docs/api-surface.md). The legacy `builder.fonteslabs.com` callback host is also attached as a custom domain
 so it resolves even after the old frontend deployment is deleted.
 `GOOGLE_REDIRECT_URI` preserves that registered callback for both authorization
 and token exchange. The legacy callback route forwards code/state to the canonical
@@ -74,13 +74,13 @@ use `localhost`, not `127.0.0.1`, so both ports share the cookie site.
 
 ## Structure
 
-- `worker/models/`: project and organization classes own D1 queries.
-- `worker/controllers/`: routing, authorization, application actions and Scalar docs.
-- `worker/controllers/AuthController.ts`: Better Auth configuration, username validation, email HTML and Scalar docs.
+- `worker/models/`: workspace restoration and visible project queries for onboarding.
+- `worker/controllers/`: routing, authorization and app actions.
+- `worker/controllers/AuthController.ts`: public auth route allowlist, sessions and Better Auth configuration.
 - `worker/index.ts`: Worker entrypoint.
 
-Builds are minified. Project listing combines membership and visibility in one
-query; organization join limits use a D1 batch. Auth remains request-scoped.
+Builds are minified. Onboarding project selection combines membership and visibility
+in one query. Auth remains request-scoped.
 
 ## Onboarding v2 rollout
 
@@ -90,8 +90,7 @@ onboarding progress/preferences and invitation records. It does not replace the
 existing Better Auth or project schema. No migration is applied by the build.
 
 The email OTP plugin supports six-digit login codes (10-minute expiry, hashed
-storage, five attempts). Existing password endpoints remain compatible; the new
-frontend uses OTP or Google exclusively.
+storage, five attempts). Password login, change and recovery remain available alongside OTP and Google.
 
 `GET /api/onboarding` returns the verified user's workspace, profile, default
 project, preferences and completion state. `POST /api/onboarding` accepts a full

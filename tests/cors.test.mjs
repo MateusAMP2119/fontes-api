@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { preflight, withCors } from '../worker/cors.ts'
 
 const origin = 'https://app.fonteslabs.com'
-const request = (method = 'POST', headers = 'Content-Type') => new Request('https://api.fonteslabs.com/api/projects', {
+const request = (method = 'POST', headers = 'Content-Type') => new Request('https://api.fonteslabs.com/api/onboarding', {
   method: 'OPTIONS',
   headers: { Origin: origin, 'Access-Control-Request-Method': method, 'Access-Control-Request-Headers': headers },
 })

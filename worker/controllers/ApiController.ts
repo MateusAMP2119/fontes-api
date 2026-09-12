@@ -1,11 +1,7 @@
 import briefing from '../../briefing/index.ts'
 import { OnboardingController } from './OnboardingController'
 import { BriefingController } from './BriefingController'
-import { OrganizationModel } from '../models/OrganizationModel'
-import { ProjectModel } from '../models/ProjectModel'
 import { AuthController, type WorkerEnv } from './AuthController'
-import { OrganizationController } from './OrganizationController'
-import { ProjectController } from './ProjectController'
 
 export class ApiController {
   private env: WorkerEnv
@@ -14,9 +10,7 @@ export class ApiController {
 
   async handle(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname
-    if (path === '/') return Response.redirect(new URL('/api/auth/docs', request.url).toString(), 302)
-    if (path.replace(/\/+$/, '') === '/api/auth/docs') return AuthController.page(request)
-    if (!path.startsWith('/api/auth/') && path !== '/api/projects' && !path.startsWith('/api/onboarding') && path !== '/api/briefing' && path !== '/api/briefing/generate') return new Response(null, { status: 404 })
+    if (!AuthController.publicMethod(path) && !path.startsWith('/api/onboarding') && path !== '/api/briefing' && path !== '/api/briefing/generate') return new Response(null, { status: 404 })
     if (path === '/api/briefing/generate') {
       const url = new URL(request.url); url.pathname = '/generate'
       return briefing.fetch(new Request(url, request), this.env)
@@ -27,22 +21,12 @@ export class ApiController {
       return Response.json({ code: 'AUTH_NOT_CONFIGURED' }, { status: 503 })
     }
     try {
-      if (path === '/api/auth/health') {
-        if (request.method !== 'GET') return new Response(null, { status: 405 })
-        await env.APP_DB.prepare('SELECT id FROM user LIMIT 1').first()
-        return Response.json({ status: 'ok', runtime: 'cloudflare-worker' }, { headers: { 'cache-control': 'no-store' } })
-      }
       if ((path === '/api/auth/sign-in/social' || path === '/api/auth/callback/google') && (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET)) {
         return Response.json({ code: 'GOOGLE_NOT_CONFIGURED' }, { status: 503 })
       }
       const auth = new AuthController(env, this.context)
       if (path.startsWith('/api/briefing')) return await new BriefingController(env, auth).handle(request)
       if (path.startsWith('/api/onboarding')) return await new OnboardingController(env, auth).handle(request)
-      if (path === '/api/auth/openapi.json') return await auth.documentation(request)
-      if (path === '/api/projects') return await new ProjectController(new ProjectModel(env.APP_DB), auth).handle(request, AuthController.isTrustedOrigin(request.headers.get('origin'), env))
-      if (path.startsWith('/api/auth/organization-access/')) {
-        return await new OrganizationController(new OrganizationModel(env.APP_DB), auth, env.BETTER_AUTH_SECRET).handle(request, AuthController.isTrustedOrigin(request.headers.get('origin'), env))
-      }
       return await auth.handle(request)
     } catch (error) {
       console.error(JSON.stringify({ event: 'api_request_failed', method: request.method, path, error: error instanceof Error ? error.message : String(error) }))

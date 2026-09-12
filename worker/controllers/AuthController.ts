@@ -1,8 +1,7 @@
 import { betterAuth } from 'better-auth'
 import { APIError } from 'better-auth/api'
 import { OrganizationModel } from '../models/OrganizationModel'
-import { jwt, organization, openAPI, emailOTP } from 'better-auth/plugins'
-import custom from '../openapi.json'
+import { emailOTP } from 'better-auth/plugins'
 import { createOAuthProxy } from '../oauth'
 import { sendTransactionalEmail, OTP_SECONDS, RESET_SECONDS, VERIFICATION_SECONDS } from '../email/send'
 
@@ -35,25 +34,16 @@ function trustedOrigins(env: WorkerEnv) {
     : TRUSTED_ORIGINS
 }
 
-// Pin the browser bundle so local and deployed docs use the same Scalar release.
-const html = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Fontes App API · Scalar</title>
-<style>body{margin:0}</style>
-</head><body>
-<div id="app"></div>
-<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.67.0/dist/browser/standalone.js"></script>
-<script>Scalar.createApiReference('#app', {
-  url: '/api/auth/openapi.json',
-  theme: 'default',
-  hideClientButton: false,
-  showDeveloperTools: 'never',
-  persistAuth: false,
-  telemetry: false,
-  proxyUrl: '',
-  customFetch: (input, init) => fetch(input, { ...init, credentials: 'same-origin' })
-})</script>
-</body></html>`
+// Public auth surface used by the app, including redirects from Google and email.
+const GET_PATHS = new Set([
+  '/api/auth/get-session', '/api/auth/callback/google', '/api/auth/oauth-proxy-callback',
+  '/api/auth/verify-email', '/api/auth/error',
+])
+const POST_PATHS = new Set([
+  '/api/auth/sign-in/social', '/api/auth/sign-in/email', '/api/auth/sign-in/email-otp',
+  '/api/auth/email-otp/send-verification-otp', '/api/auth/sign-out',
+  '/api/auth/change-password', '/api/auth/reset-password', '/api/auth/request-password-reset',
+])
 
 export class AuthController {
   private auth: ReturnType<typeof AuthController.createAuth>
@@ -63,31 +53,21 @@ export class AuthController {
   }
 
   session(request: Request) { return this.auth.api.getSession({ headers: request.headers }) }
-  handle(request: Request) { return this.auth.handler(request) }
+  static publicMethod(path: string): 'GET' | 'POST' | undefined {
+    if (GET_PATHS.has(path)) return 'GET'
+    if (POST_PATHS.has(path)) return 'POST'
+    if (/^\/api\/auth\/reset-password\/[^/]+$/.test(path)) return 'GET'
+  }
+
+  handle(request: Request) {
+    const path = new URL(request.url).pathname
+    const method = AuthController.publicMethod(path)
+    if (!method) return new Response(null, { status: 404 })
+    if (request.method !== method) return new Response(null, { status: 405, headers: { Allow: method } })
+    return this.auth.handler(request)
+  }
   setPassword(request: Request, newPassword: string) {
     return this.auth.api.setPassword({ headers: request.headers, body: { newPassword } })
-  }
-
-  async documentation(request: Request) {
-    if (request.method !== 'GET') return new Response(null, { status: 405 })
-    const generated = await this.auth.api.generateOpenAPISchema()
-    const schema = { ...generated, info: custom.info, servers: [{ url: '/' }],
-      paths: { ...Object.fromEntries(Object.entries(generated.paths).map(([path, operation]) => ['/api/auth' + path, operation])), ...custom.paths },
-      components: { ...generated.components, securitySchemes: { ...generated.components.securitySchemes, ...custom.components.securitySchemes } },
-    }
-    return Response.json(schema, { headers: { 'cache-control': 'public, max-age=60' } })
-  }
-
-  static page(request: Request): Response {
-    if (request.method !== 'GET' && request.method !== 'HEAD') return new Response(null, { status: 405, headers: { allow: 'GET, HEAD' } })
-    return new Response(request.method === 'HEAD' ? null : html, {
-      headers: {
-        'content-type': 'text/html; charset=utf-8',
-        'cache-control': 'no-cache',
-        'x-content-type-options': 'nosniff',
-        'referrer-policy': 'no-referrer',
-      },
-    })
   }
 
   static isTrustedOrigin(origin: string | null, env: WorkerEnv) {
@@ -115,6 +95,11 @@ export class AuthController {
       user: {
         additionalFields: {
           username: { type: 'string', required: false, unique: true },
+        },
+      },
+      session: {
+        additionalFields: {
+          activeOrganizationId: { type: 'string', required: false, input: false },
         },
       },
       emailAndPassword: {
@@ -152,39 +137,15 @@ export class AuthController {
           '/email-otp/send-verification-otp': { window: 60, max: 3 },
           '/sign-in/email-otp': { window: 60, max: 10 },
           '/sign-in/email': { window: 60, max: 10 },
-          '/sign-up/email': { window: 60 * 60, max: 10 },
           '/request-password-reset': { window: 60 * 60, max: 5 },
-          '/send-verification-email': { window: 60 * 60, max: 5 },
         },
       },
       plugins: [
-        openAPI({ disableDefaultReference: true }),
         createOAuthProxy(baseURL, env.OAUTH_PROXY_SECRET),
         emailOTP({
           otpLength: 6, expiresIn: OTP_SECONDS, allowedAttempts: 5, storeOTP: 'hashed',
           async sendVerificationOTP({ email, otp, type }) {
             await sendTransactionalEmail(env, email, { kind: type, code: otp })
-          },
-        }),
-        organization({
-          organizationHooks: {
-            beforeCreateOrganization: async ({ organization }) => {
-              const name = organization.name?.trim()
-              if (!name || name.length > 80) throw new APIError('BAD_REQUEST', { message: 'Nome inválido.' })
-              return { data: { ...organization, name } }
-            },
-          },
-        }),
-        jwt({
-          jwks: {
-            jwksPath: '/.well-known/jwks.json',
-            rotationInterval: 60 * 60 * 24 * 30,
-            gracePeriod: 60 * 60 * 24 * 30,
-          },
-          jwt: {
-            issuer: `${baseURL}/api/auth`,
-            audience: 'authenticated',
-            expirationTime: '15 minutes',
           },
         }),
       ],
