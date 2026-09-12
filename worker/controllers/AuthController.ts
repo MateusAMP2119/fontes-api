@@ -133,7 +133,7 @@ export class AuthController {
       const labels: Record<string, string> = {
         '/email-otp/send-verification-otp': 'Send registration code',
         '/sign-in/email-otp': 'Verify registration code',
-        '/sign-in/email': 'Sign in with password',
+        '/sign-in/email': 'Log in account',
         '/get-session': 'Read current session',
         '/change-password': 'Set password',
       }
