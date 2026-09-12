@@ -143,7 +143,7 @@ export class AuthController {
         '/get-session': 'Read current session',
         '/change-password': 'Set password',
         '/request-password-reset': 'Send recovery email',
-        '/reset-password/{token}': 'Open password recovery link',
+        '/reset-password/{token}': 'Validate recovery link',
         '/reset-password': 'Reset forgotten password',
       }
       const codePurpose = operation.requestBody?.content?.['application/json']?.schema?.properties?.type
