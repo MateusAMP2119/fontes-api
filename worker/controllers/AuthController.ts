@@ -157,8 +157,7 @@ export class AuthController {
         operation.description = 'Requires a verified session and password. Use an empty string only when no password exists.'
       }
       if (path === '/get-session') operation.description = 'Returns the current session and user, or null.'
-      operation.tags = [path.includes('password') ? 'Passwords'
-        : ['/get-session', '/sign-out'].includes(path) ? 'Sessions'
+      operation.tags = [['/get-session', '/sign-out'].includes(path) ? 'Sessions'
         : path === '/verify-email' ? 'Email verification' : 'Authentication']
       if (path === '/sign-in/social') {
         operation.description = 'Starts Google sign-in. callbackURL is the return address, e.g. https://app.fonteslabs.com/.'
@@ -169,7 +168,7 @@ export class AuthController {
       return [[fullPath.replace('{id}', 'google'), { [method]: { ...operation, security, ...(labels[path] ? { summary: labels[path] } : {}) } }]]
     }))
     return Response.json({ ...generated, info: custom.info, servers: [{ url: '/' }], security: [],
-      tags: [...['Authentication', 'Sessions', 'Passwords', 'Email verification'].map(name => ({ name })), ...custom.tags],
+      tags: [...['Authentication', 'Sessions', 'Email verification'].map(name => ({ name })), ...custom.tags],
       paths: { ...paths, ...custom.paths },
       components: { ...generated.components, securitySchemes: custom.components.securitySchemes },
     })
