@@ -1,6 +1,6 @@
 # Public API surface
 
-Only routes used by fontes-app and their authentication/email dependencies are exposed, plus the retained briefing reader and generator. All other application routes return 404. OPTIONS is handled centrally for CORS. Unsupported methods on retained routes return 405.
+Only routes used by fontes-app and their authentication/email dependencies are exposed, plus the retained briefing reader, generator and API documentation. All other application routes return 404. OPTIONS is handled centrally for CORS. Unsupported methods on retained routes return 405.
 
 ## Authentication
 
@@ -23,7 +23,7 @@ All paths below are relative to `/api/auth`.
 | POST | `/reset-password` | Set a password using a recovery token. |
 | GET | `/verify-email` | Complete verification links, including previously issued links. |
 
-`AuthController.publicMethod` defines the public auth surface. Better Auth core and email OTP still provide server-side implementation, but unlisted HTTP routes are rejected before invoking their handlers. The organization, JWT and OpenAPI plugins have been removed. The existing `session.activeOrganizationId` column is retained as a server-controlled additional field so workspace restoration and onboarding keep working. `auth.api.setPassword` is a server-only operation called by onboarding.
+`AuthController.publicMethod` defines the public auth surface. Better Auth core and email OTP still provide server-side implementation, but unlisted HTTP routes are rejected before invoking their handlers. The organization and JWT plugins have been removed. OpenAPI generation is used only for the filtered documentation schema. The existing `session.activeOrganizationId` column is retained as a server-controlled additional field so workspace restoration and onboarding keep working. `auth.api.setPassword` is a server-only operation called by onboarding.
 
 ## Onboarding and briefings
 
@@ -45,6 +45,6 @@ See [briefing contract](briefing.md) for generation inputs and storage behavior.
 
 ## Removed surface
 
-Standalone project operations, access-code joins, invitation previews, slug availability checks, organization/member/invitation SDK endpoints, JWT/JWKS, health endpoints, Scalar/OpenAPI endpoints and unused core/OTP auth routes are no longer public. The root documentation redirect is removed. The matching app change removes the unused JWT and organization client plugins.
+Standalone project operations, access-code joins, invitation previews, slug availability checks, organization/member/invitation SDK endpoints, JWT/JWKS, health endpoints, unused core/OTP auth routes are no longer public. The root URL redirects to Scalar at `/api/auth/docs`, which reads the filtered schema at `/api/auth/openapi.json`. The raw Better Auth schema and reference routes remain unavailable. The matching app change removes the unused JWT and organization client plugins.
 
 No database migration or data deletion is needed. Existing accounts, session cookies, workspace memberships, projects and saved briefings remain valid. The separate news API is unchanged.

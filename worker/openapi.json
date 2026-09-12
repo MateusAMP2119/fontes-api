@@ -1,0 +1,439 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Fontes App API",
+    "version": "0.1.2",
+    "description": "Fontes app authentication, onboarding and briefings. Only supported public operations are documented. Browser sessions use HttpOnly cookies."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current environment"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Onboarding"
+    },
+    {
+      "name": "Briefing"
+    }
+  ],
+  "paths": {
+    "/api/briefing": {
+      "get": {
+        "tags": [
+          "Briefing"
+        ],
+        "summary": "Read the saved general briefing",
+        "description": "Requires a verified session. No query parameters or body. Reads serve the latest valid general briefing from D1 without invoking AI. Responses include text, linked segments, story labels, counts, period, generation_id, and model/prompt metadata.",
+        "responses": {
+          "200": {
+            "description": "Saved or cached briefing."
+          },
+          "401": {
+            "description": "Session required."
+          },
+          "403": {
+            "description": "Verified email or trusted Origin required."
+          },
+          "404": {
+            "description": "No briefing generated yet."
+          },
+          "409": {
+            "description": "Generation in progress."
+          },
+          "502": {
+            "description": "Source generation failed; prior snapshot preserved."
+          },
+          "503": {
+            "description": "Briefing unavailable or not configured."
+          },
+          "400": {
+            "description": "Parameters and request bodies are not supported."
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "secureSessionCookie": []
+          }
+        ]
+      }
+    },
+    "/api/briefing/generate": {
+      "post": {
+        "tags": [
+          "Briefing"
+        ],
+        "summary": "Generate a general briefing on request",
+        "description": "Requires the server-held EBS_API_TOKEN bearer credential. Generates inside fontes-api with Gemma 4 for an explicit interval of at most 31 days. Exact interval results are reused from D1. Inputs, model response and usage are retained in generation history. No separate Worker or service binding.",
+        "responses": {
+          "200": {
+            "description": "Saved or cached briefing."
+          },
+          "401": {
+            "description": "Missing or invalid bearer token."
+          },
+          "404": {
+            "description": "No briefing generated yet."
+          },
+          "409": {
+            "description": "Generation in progress or brief failure cooldown. Retry-After header indicates when to retry."
+          },
+          "502": {
+            "description": "Source generation failed; prior snapshot preserved."
+          },
+          "503": {
+            "description": "Briefing unavailable or not configured."
+          },
+          "201": {
+            "description": "New briefing generated and saved."
+          },
+          "400": {
+            "description": "Missing or invalid explicit interval."
+          }
+        },
+        "security": [
+          {
+            "briefingBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "from",
+                  "until"
+                ],
+                "properties": {
+                  "from": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "until": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/onboarding": {
+      "get": {
+        "tags": [
+          "Onboarding"
+        ],
+        "summary": "Read onboarding state",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "secureSessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response."
+          },
+          "400": {
+            "description": "Invalid input."
+          },
+          "401": {
+            "description": "Verified session required."
+          },
+          "403": {
+            "description": "Trusted origin or workspace permission required."
+          },
+          "409": {
+            "description": "Setup conflict."
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Onboarding"
+        ],
+        "summary": "Save onboarding setup",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "secureSessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response."
+          },
+          "400": {
+            "description": "Invalid input."
+          },
+          "401": {
+            "description": "Verified session required."
+          },
+          "403": {
+            "description": "Trusted origin or workspace permission required."
+          },
+          "409": {
+            "description": "Setup conflict."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operationId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "profileName": {
+                    "type": "string"
+                  },
+                  "organizationId": {
+                    "type": "string"
+                  },
+                  "profileImage": {
+                    "type": "string"
+                  },
+                  "completed": {
+                    "type": "boolean"
+                  },
+                  "changelog": {
+                    "type": "boolean"
+                  },
+                  "daily": {
+                    "type": "boolean"
+                  },
+                  "revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "operationId",
+                  "revision",
+                  "name",
+                  "slug",
+                  "profileName",
+                  "completed",
+                  "changelog",
+                  "daily"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/onboarding/password": {
+      "post": {
+        "tags": [
+          "Onboarding"
+        ],
+        "summary": "Set the first password",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "secureSessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response."
+          },
+          "400": {
+            "description": "Invalid input."
+          },
+          "401": {
+            "description": "Verified session required."
+          },
+          "403": {
+            "description": "Trusted origin or workspace permission required."
+          },
+          "409": {
+            "description": "Setup conflict."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "newPassword"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/onboarding/invite": {
+      "post": {
+        "tags": [
+          "Onboarding"
+        ],
+        "summary": "Create or send an invitation",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "secureSessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response."
+          },
+          "400": {
+            "description": "Invalid input."
+          },
+          "401": {
+            "description": "Verified session required."
+          },
+          "403": {
+            "description": "Trusted origin or workspace permission required."
+          },
+          "409": {
+            "description": "Setup conflict."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "organizationId": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "email"
+                  }
+                },
+                "required": [
+                  "token",
+                  "organizationId",
+                  "email"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/onboarding/join": {
+      "post": {
+        "tags": [
+          "Onboarding"
+        ],
+        "summary": "Accept an invitation",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "secureSessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response."
+          },
+          "400": {
+            "description": "Invalid input."
+          },
+          "401": {
+            "description": "Verified session required."
+          },
+          "403": {
+            "description": "Trusted origin or workspace permission required."
+          },
+          "409": {
+            "description": "Setup conflict."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "better-auth.session_token",
+        "description": "Local HTTP session; managed by the browser."
+      },
+      "secureSessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Secure-better-auth.session_token",
+        "description": "HTTPS session; managed by the browser."
+      },
+      "briefingBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Server-held EBS_API_TOKEN, retained during consolidation."
+      }
+    }
+  }
+}

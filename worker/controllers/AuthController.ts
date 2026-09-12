@@ -1,7 +1,8 @@
 import { betterAuth } from 'better-auth'
 import { APIError } from 'better-auth/api'
 import { OrganizationModel } from '../models/OrganizationModel'
-import { emailOTP } from 'better-auth/plugins'
+import { openAPI, emailOTP } from 'better-auth/plugins'
+import custom from '../openapi.json'
 import { createOAuthProxy } from '../oauth'
 import { sendTransactionalEmail, OTP_SECONDS, RESET_SECONDS, VERIFICATION_SECONDS } from '../email/send'
 
@@ -33,6 +34,26 @@ function trustedOrigins(env: WorkerEnv) {
     ? [...TRUSTED_ORIGINS, env.BETTER_AUTH_URL]
     : TRUSTED_ORIGINS
 }
+
+// Pin the browser bundle so local and deployed docs use the same Scalar release.
+const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fontes App API · Scalar</title>
+<style>body{margin:0}</style>
+</head><body>
+<div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.67.0/dist/browser/standalone.js"></script>
+<script>Scalar.createApiReference('#app', {
+  url: '/api/auth/openapi.json',
+  theme: 'default',
+  hideClientButton: false,
+  showDeveloperTools: 'never',
+  persistAuth: false,
+  telemetry: false,
+  proxyUrl: '',
+  customFetch: (input, init) => fetch(input, { ...init, credentials: 'same-origin' })
+})</script>
+</body></html>`
 
 // Public auth surface used by the app, including redirects from Google and email.
 const GET_PATHS = new Set([
@@ -68,6 +89,38 @@ export class AuthController {
   }
   setPassword(request: Request, newPassword: string) {
     return this.auth.api.setPassword({ headers: request.headers, body: { newPassword } })
+  }
+
+  async documentation(request: Request) {
+    if (request.method !== 'GET') return new Response(null, { status: 405, headers: { Allow: 'GET' } })
+    const generated = await this.auth.api.generateOpenAPISchema()
+    const paths = Object.fromEntries(Object.entries(generated.paths).flatMap(([path, operations]) => {
+      const fullPath = '/api/auth' + path
+      const method = AuthController.publicMethod(fullPath.replace('{id}', 'google'))?.toLowerCase()
+      if (!method || !(method in operations)) return []
+      const operation = operations[method as keyof typeof operations]
+      if (!operation) return []
+      if (path === '/callback/{id}' && operation.parameters) {
+        operation.parameters = operation.parameters.filter(parameter => parameter.in !== 'path' || parameter.name !== 'id')
+      }
+      return [[fullPath.replace('{id}', 'google'), { [method]: operation }]]
+    }))
+    return Response.json({ ...generated, info: custom.info, servers: [{ url: '/' }],
+      paths: { ...paths, ...custom.paths },
+      components: { ...generated.components, securitySchemes: { ...generated.components.securitySchemes, ...custom.components.securitySchemes } },
+    })
+  }
+
+  static page(request: Request): Response {
+    if (request.method !== 'GET' && request.method !== 'HEAD') return new Response(null, { status: 405, headers: { allow: 'GET, HEAD' } })
+    return new Response(request.method === 'HEAD' ? null : html, {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-cache',
+        'x-content-type-options': 'nosniff',
+        'referrer-policy': 'no-referrer',
+      },
+    })
   }
 
   static isTrustedOrigin(origin: string | null, env: WorkerEnv) {
@@ -141,6 +194,7 @@ export class AuthController {
         },
       },
       plugins: [
+        openAPI({ disableDefaultReference: true }),
         createOAuthProxy(baseURL, env.OAUTH_PROXY_SECRET),
         emailOTP({
           otpLength: 6, expiresIn: OTP_SECONDS, allowedAttempts: 5, storeOTP: 'hashed',
