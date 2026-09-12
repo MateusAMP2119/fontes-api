@@ -100,16 +100,16 @@ export class AuthController {
       if (!session?.user.emailVerified) return Response.json({ message: 'Confirmação de email necessária.' }, { status: 401 })
       let body
       try { body = await request.json() as Record<string, unknown> } catch { return new Response(null, { status: 400 }) }
-      if (!body || typeof body.currentPassword !== 'string' || typeof body.newPassword !== 'string'
+      if (!body || typeof body.password !== 'string' || typeof body['new-password'] !== 'string'
         || (body.revokeOtherSessions !== undefined && typeof body.revokeOtherSessions !== 'boolean')) return Response.json({ message: 'Palavra-passe atual e nova obrigatórias.' }, { status: 400 })
-      if (body.currentPassword === '') {
+      if (body.password === '') {
         const created = new Date(session.session.createdAt).getTime()
         if (!Number.isFinite(created) || Date.now() - created > 15 * 60 * 1000) return Response.json({ message: 'Nova autenticação necessária.', step: 'email' }, { status: 401 })
-        return this.auth.api.setPassword({ headers: request.headers, body: { newPassword: body.newPassword }, asResponse: true })
+        return this.auth.api.setPassword({ headers: request.headers, body: { newPassword: body['new-password'] }, asResponse: true })
       }
       const url = new URL(request.url)
       url.pathname = '/api/auth/change-password'
-      return this.auth.handler(new Request(url, { method: 'POST', headers: request.headers, body: JSON.stringify(body) }))
+      return this.auth.handler(new Request(url, { method: 'POST', headers: request.headers, body: JSON.stringify({ currentPassword: body.password, newPassword: body['new-password'], revokeOtherSessions: body.revokeOtherSessions }) }))
     }
     return this.auth.handler(request)
   }
@@ -146,7 +146,15 @@ export class AuthController {
       if (path === '/sign-in/email-otp') operation.description = 'Verifies a new account and returns its first session token. Existing accounts use password or Google.'
       if (path === '/sign-in/email') operation.description = 'Returns a session token for an existing account.'
       if (path === '/change-password') {
-        operation.description = 'Requires a verified session and currentPassword. Use an empty string only when no password exists.'
+        const schema = operation.requestBody?.content?.['application/json']?.schema
+        if (schema?.properties) {
+          schema.properties.password = schema.properties.currentPassword
+          schema.properties['new-password'] = schema.properties.newPassword
+          delete schema.properties.currentPassword
+          delete schema.properties.newPassword
+          schema.required = schema.required?.map(name => name === 'currentPassword' ? 'password' : name === 'newPassword' ? 'new-password' : name)
+        }
+        operation.description = 'Requires a verified session and password. Use an empty string only when no password exists.'
       }
       if (path === '/get-session') operation.description = 'Returns the current session and user, or null.'
       operation.tags = [path.includes('password') ? 'Passwords'
