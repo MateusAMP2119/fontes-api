@@ -35,7 +35,6 @@ test('root and docs remain public while the schema includes only retained API op
   assert.deepEqual(schema.security, [])
   for (const path of ['/api/auth/email-otp/send-verification-otp', '/api/auth/sign-in/email-otp', '/api/auth/sign-in/email', '/api/auth/sign-in/social']) assert.deepEqual(schema.paths[path].post.security, [], path)
   assert.equal(schema.paths['/api/auth/sign-in/email-otp'].post.summary, 'Create user or sign in with code')
-  assert.match(schema.info.description, /Create a user and a session/)
   for (const operations of Object.values(schema.paths)) {
     for (const operation of Object.values(operations)) {
       for (const requirement of operation.security ?? []) {

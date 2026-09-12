@@ -118,15 +118,15 @@ export class AuthController {
         '/sign-in/email': 'Sign in with password',
         '/get-session': 'Read current session',
       }
-      if (path === '/email-otp/send-verification-otp') operation.description = 'Public endpoint: no account or bearer token required. Sends a six-digit email code with type sign-in. Does not create a user or session yet. The code expires after 10 minutes. Next: POST /api/auth/sign-in/email-otp.'
-      if (path === '/sign-in/email-otp') operation.description = 'Public endpoint: no bearer token required. A valid email code creates a verified user if the email is new, or signs in the existing user. Both cases create a session and return token and user. The optional name applies only to new users. The returned token can authorize briefing requests.'
-      if (path === '/sign-in/email') operation.description = 'Public endpoint: no bearer token required. Authenticates an existing verified account with a password and returns a new session token. Does not create a user. New users register through the email-code flow.'
-      if (path === '/get-session') operation.description = 'Returns the current session and user using a session cookie or bearer token, or null without an active session. session.token can be used as the bearer token for briefing requests.'
+      if (path === '/email-otp/send-verification-otp') operation.description = 'Sends a six-digit sign-in code, valid for 10 minutes.'
+      if (path === '/sign-in/email-otp') operation.description = 'Creates an account if needed and returns a session token.'
+      if (path === '/sign-in/email') operation.description = 'Returns a session token for an existing account.'
+      if (path === '/get-session') operation.description = 'Returns the current session and user, or null.'
       operation.tags = [path.includes('password') ? 'Passwords'
         : ['/get-session', '/sign-out'].includes(path) ? 'Sessions'
         : path === '/verify-email' ? 'Email verification' : 'Authentication']
       if (path === '/sign-in/social') {
-        operation.description = 'Start Google sign-in. callbackURL is the destination after authentication, for example https://app.fonteslabs.com/. Absolute URLs must use a trusted origin; http://localhost:5173/ is allowed for local development. The app popup supplies /google-auth.html with its attempt and complete query parameters automatically. The Google provider redirect URI is configured separately on the server.'
+        operation.description = 'Starts Google sign-in. callbackURL is the return address, e.g. https://app.fonteslabs.com/.'
       }
       if (path === '/callback/{id}' && operation.parameters) {
         operation.parameters = operation.parameters.filter(parameter => parameter.in !== 'path' || parameter.name !== 'id')

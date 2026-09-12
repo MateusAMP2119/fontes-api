@@ -3,7 +3,7 @@
   "info": {
     "title": "Fontes App API",
     "version": "0.1.2",
-    "description": "Fontes app authentication, onboarding and briefings.\n\n## Create a user and a session\n\nNo existing account, session or bearer token is required for these two requests. In each endpoint, the Test Request panel accepts the JSON body below.\n\n1. **Send sign-in code**: `POST /api/auth/email-otp/send-verification-otp`.\n\n```json\n{\"email\":\"name@example.com\",\"type\":\"sign-in\"}\n```\n\nThis sends a six-digit code to the email address. It does not create a user yet. The code expires after 10 minutes.\n\n2. **Create user or sign in with code**: `POST /api/auth/sign-in/email-otp`, with the code received by email.\n\n```json\n{\"email\":\"name@example.com\",\"otp\":\"123456\",\"name\":\"Example Name\"}\n```\n\n`123456` is a placeholder. A valid code creates a verified user if the email is new, or signs in the existing user. Both cases create a session. `name` is optional and applies only to a new user. The response contains `token` and `user`; the browser also receives an HttpOnly session cookie.\n\n3. **Use the session**: the `token` response value belongs in the `sessionBearer` authentication field of the Test Request panel. The field accepts the token alone and sends `Authorization: Bearer <token>`. `GET /api/auth/get-session` returns the active session; browser requests on this documentation site also send its session cookie automatically. Both briefing endpoints require the explicit bearer header.\n\n## Existing password account\n\n**Sign in with password**: `POST /api/auth/sign-in/email` creates a new session for an existing account with a password.\n\n```json\n{\"email\":\"name@example.com\",\"password\":\"existing-password\"}\n```\n\nThe response contains the session `token`. A callbackURL is not required for this flow. This endpoint does not create users.\n\n## Password and profile after registration\n\nA new email-code account has no password yet. `POST /api/onboarding/password` accepts `{\"newPassword\":\"a-long-unique-password\"}` with the new session, within 15 minutes of login. The password must have 8 to 128 characters and can only be set once through this route. Profile and workspace setup use `/api/onboarding`; completion is not required to call the briefing endpoints.\n\nThere is no separate public email/password signup endpoint. The same email-code flow handles registration and login. Google sign-in also supports new accounts; the Fontes app manages the browser redirect flow.\n"
+    "description": "Authentication, onboarding and briefings."
   },
   "servers": [
     {
@@ -26,7 +26,7 @@
           "Briefing"
         ],
         "summary": "Read cached briefing",
-        "description": "Requires Authorization: Bearer <session-token> for a verified user. No query parameters or body. Reads the latest saved general briefing from D1 without invoking AI.",
+        "description": "Returns the latest cached briefing. Requires a verified session bearer token.",
         "responses": {
           "200": {
             "description": "Saved or cached briefing."
@@ -66,7 +66,7 @@
           "Briefing"
         ],
         "summary": "Generate  new briefing",
-        "description": "Requires Authorization: Bearer <session-token> for a verified user. Generates a briefing for an explicit interval of at most 31 days. Exact interval results are reused from D1. Inputs, model response and usage are retained in generation history.",
+        "description": "Generates a briefing for the requested interval, or returns its cached result. Requires a verified session bearer token.",
         "responses": {
           "200": {
             "description": "Saved or cached briefing."
@@ -447,7 +447,7 @@
       "sessionBearer": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Session token returned by sign-in (token), GET /api/auth/get-session (session.token), or the set-auth-token response header. Requires a live session for a verified user; expires or is revoked with the session."
+        "description": "Session token returned by sign-in."
       }
     }
   }
