@@ -10,19 +10,20 @@ const source = readFileSync(new URL('../worker/controllers/OnboardingController.
 const model = readFileSync(new URL('../worker/models/ProjectModel.ts', import.meta.url), 'utf8')
 const organizationModel = readFileSync(new URL('../worker/models/OrganizationModel.ts', import.meta.url), 'utf8')
 const js = ts.transpileModule(`const AuthController = { isTrustedOrigin: (origin: string) => origin === 'https://app.fonteslabs.com' };\n${model}\n${organizationModel}\n${source}`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
-const emailImport = `import { sendTransactionalEmail, INVITE_SECONDS } from '${new URL('../worker/email/send.ts', import.meta.url).href}';\n`
+const emailImport = `import { defaultUsername } from '${new URL('../worker/username.ts',import.meta.url).href}';
+import { sendTransactionalEmail, INVITE_SECONDS } from '${new URL('../worker/email/send.ts', import.meta.url).href}';\n`
 const { OnboardingController, OrganizationModel } = await import('data:text/javascript;base64,' + Buffer.from(emailImport + js).toString('base64'))
 function fixture() {
  const sql = new DatabaseSync(':memory:')
  sql.exec(`PRAGMA foreign_keys=ON;
- CREATE TABLE user(id TEXT PRIMARY KEY, name TEXT, image TEXT, updatedAt INTEGER);
+ CREATE TABLE user(id TEXT PRIMARY KEY, name TEXT, username TEXT UNIQUE, image TEXT, updatedAt INTEGER);
  CREATE TABLE account(id TEXT PRIMARY KEY, userId TEXT, providerId TEXT, password TEXT);
  INSERT INTO account VALUES ('au','u','credential','test-hash'),('av','v','credential','test-hash');
  CREATE TABLE organization(id TEXT PRIMARY KEY, name TEXT, slug TEXT UNIQUE, createdAt INTEGER);
  CREATE TABLE member(id TEXT PRIMARY KEY, organizationId TEXT REFERENCES organization(id), userId TEXT REFERENCES user(id), role TEXT, createdAt INTEGER);
  CREATE TABLE project(id TEXT PRIMARY KEY, organizationId TEXT REFERENCES organization(id), name TEXT, createdAt TEXT, ownerId TEXT, visibility TEXT);
  CREATE TABLE session(id TEXT PRIMARY KEY, userId TEXT, activeOrganizationId TEXT);
- INSERT INTO user VALUES ('u','User',NULL,0),('v','Visitor',NULL,0);
+ INSERT INTO user VALUES ('u','User',NULL,NULL,0),('v','Visitor',NULL,NULL,0);
  INSERT INTO session VALUES ('s','u',NULL),('sv','v',NULL);`)
  sql.exec(readFileSync(new URL('../migrations/0001_onboarding.sql',import.meta.url),'utf8'))
  const db = { prepare(query) { let values=[]; return { bind(...args){values=args;return this}, async first(){return sql.prepare(query).get(...values)??null},async all(){return {results:sql.prepare(query).all(...values)}},async run(){return sql.prepare(query).run(...values)} } }, async batch(statements){sql.exec('BEGIN');try{const rows=[];for(const statement of statements)rows.push(await statement.run());sql.exec('COMMIT');return rows}catch(error){sql.exec('ROLLBACK');throw error}} }
@@ -173,4 +174,14 @@ test('workspace restoration falls back safely when selection is absent or member
   f.sql.exec("DELETE FROM member WHERE userId='v'")
   assert.equal(await f.organizations.resumeFor('v'), null)
  } finally { f.sql.close() }
+})
+
+test('first profile supplies a username while later profile edits preserve it',async()=>{
+ const f=fixture()
+ f.sql.exec("UPDATE user SET name='',username='u' WHERE id='u'")
+ assert.equal((await f.call('',{...f.setup,profileName:'Mateus Costa'})).status,200)
+ assert.equal(f.sql.prepare("SELECT username FROM user WHERE id='u'").get().username,'mateuscosta')
+ assert.equal((await f.call('',{...f.setup,revision:2,operationId:'operation-second',profileName:'Other Name'})).status,200)
+ assert.equal(f.sql.prepare("SELECT username FROM user WHERE id='u'").get().username,'mateuscosta')
+ f.sql.close()
 })

@@ -121,3 +121,14 @@ test('an unfinished registration can establish a password through email recovery
   assert.equal((await f.call('/sign-in/email',{email,password:'recovered-password'})).status,200)
   assert.equal(f.env.store.user.length,1)
 })
+
+test('registration defaults usernames from compact lowercase names and resolves duplicates',async()=>{
+ const f=fixture()
+ for (const [email,name,expected] of [['name-one@example.com','Mateus Costa','mateuscosta'],['name-two@example.com','Mateus Costa','mateuscosta2'],['name-three@example.com','João da Silva','joaodasilva']]) {
+  f.env.store.rateLimit=[]
+  await f.call('/email-otp/send-verification-otp',{email,type:'sign-in'});await Promise.all(f.pending)
+  const response=await f.call('/sign-in/email-otp',{email,name,otp:f.env.messages.find(m=>m.email===email).code})
+  assert.equal(response.status,200)
+  assert.equal((await response.json()).user.username,expected)
+ }
+})

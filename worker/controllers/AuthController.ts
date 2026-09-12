@@ -1,3 +1,4 @@
+import { defaultUsername } from '../username'
 import { betterAuth } from 'better-auth'
 import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { OrganizationModel } from '../models/OrganizationModel'
@@ -307,11 +308,13 @@ export class AuthController {
             after: async (user, ctx) => {
               if (ctx?.path === '/sign-in/email-otp') newRegistrations.add(user.id)
             },
-            before: async (user) => {
+            before: async (user, ctx) => {
               if (user.username !== undefined && !AuthController.validUsername(user.username)) {
                 throw new APIError('BAD_REQUEST', { message: 'Nome de utilizador inválido.' })
               }
-              return { data: user }
+              if (!ctx) return { data: user }
+              const username = user.username ?? await defaultUsername(user.name, user.email, async value => !!await ctx.context.adapter.findOne({ model: 'user', where: [{ field: 'username', value }] }))
+              return { data: { ...user, username } }
             },
           },
         },

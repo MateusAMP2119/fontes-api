@@ -1,3 +1,4 @@
+import { defaultUsername } from '../username'
 import { AuthController, type WorkerEnv } from './AuthController'
 import { ProjectModel } from '../models/ProjectModel'
 import { sendTransactionalEmail, INVITE_SECONDS } from '../email/send'
@@ -114,6 +115,9 @@ export class OnboardingController {
     // D1 batch is atomic. Every write is conditional on the revision; a delayed
     // request cannot overwrite a newer snapshot. IDs are stable across retries.
     const guard = 'EXISTS (SELECT 1 FROM onboarding WHERE userId = ? AND revision < ?)'
+    const profile = await db.prepare('SELECT name, username FROM user WHERE id = ?').bind(userId).first<{ name: string; username: string | null }>()
+    const username = profile?.username && profile.name ? profile.username : await defaultUsername(body.profileName as string, session.user.email,
+      async value => !!await db.prepare('SELECT id FROM user WHERE username = ? AND id != ?').bind(value, userId).first())
     const now = Date.now()
     const statements = [db.prepare('INSERT OR IGNORE INTO onboarding (userId, organizationId) VALUES (?, ?)').bind(userId, orgId)]
     if (owned) statements.push(
@@ -123,7 +127,7 @@ export class OnboardingController {
     if (body.profileImage !== undefined) statements.push(db.prepare(`UPDATE user SET image = ? WHERE id = ? AND ${guard}`).bind(body.profileImage || null, userId, userId, body.revision))
     statements.push(
       db.prepare(`INSERT OR IGNORE INTO project (id, organizationId, name, createdAt, ownerId, visibility) SELECT ?, ?, 'O meu projeto', ?, ?, 'private' WHERE ${guard} AND NOT EXISTS (SELECT 1 FROM project WHERE organizationId = ? AND (visibility = 'public' OR ownerId = ?))`).bind(`onboarding_project_${orgId}_${userId}`, orgId, new Date(now).toISOString(), userId, userId, body.revision, orgId, userId),
-      db.prepare(`UPDATE user SET name = ?, updatedAt = ? WHERE id = ? AND ${guard}`).bind(body.profileName, now, userId, userId, body.revision),
+      db.prepare(`UPDATE user SET name = ?, username = ?, updatedAt = ? WHERE id = ? AND ${guard}`).bind(body.profileName, username, now, userId, userId, body.revision),
       db.prepare(`UPDATE session SET activeOrganizationId = ? WHERE id = ? AND userId = ? AND ${guard}`).bind(orgId, session.session.id, userId, userId, body.revision),
       db.prepare('UPDATE onboarding SET organizationId = ?, revision = ?, operationId = ?, completed = ?, changelog = ?, daily = ? WHERE userId = ? AND revision < ?').bind(orgId, body.revision, body.operationId, Number(body.completed), Number(body.changelog), Number(body.daily), userId, body.revision),
     )
