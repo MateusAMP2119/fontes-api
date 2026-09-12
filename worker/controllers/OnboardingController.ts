@@ -24,7 +24,7 @@ export class OnboardingController {
 
   async handle(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname
-    if (!['/api/onboarding', '/api/onboarding/invite', '/api/onboarding/join', '/api/onboarding/password'].includes(path)) return new Response(null, { status: 404 })
+    if (!['/api/onboarding', '/api/onboarding/invite', '/api/onboarding/join'].includes(path)) return new Response(null, { status: 404 })
     if (request.method !== 'GET' && request.method !== 'POST') return new Response(null, { status: 405 })
     if (request.method === 'POST' && !AuthController.isTrustedOrigin(request.headers.get('origin'), this.env)) return new Response(null, { status: 403 })
     const session = await this.auth.session(request)
@@ -43,15 +43,6 @@ export class OnboardingController {
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('body')
       body = parsed as Record<string, unknown>
     } catch { return Response.json({ message: 'Pedido inválido.' }, { status: 400 }) }
-    if (path === '/api/onboarding/password') {
-      const created = new Date(session.session.createdAt).getTime()
-      if (!Number.isFinite(created) || Date.now() - created > 15 * 60 * 1000) return Response.json({ message: 'Nova autenticação necessária para definir a palavra-passe.', step: 'email' }, { status: 401 })
-      if (typeof body.newPassword !== 'string' || body.newPassword.length < 8 || body.newPassword.length > 128) return Response.json({ message: 'Palavra-passe entre 8 e 128 caracteres.', step: 'password' }, { status: 400 })
-      if ((await this.credentials(userId)).hasPassword) return Response.json({ message: 'Palavra-passe já definida.', step: 'password' }, { status: 409 })
-      try { await this.auth.setPassword(request, body.newPassword) }
-      catch { return Response.json({ message: 'Não foi possível definir a palavra-passe. A recuperação de acesso permite definir uma nova.', step: 'password' }, { status: 400 }) }
-      return Response.json(await this.bootstrap(userId, session.session.activeOrganizationId))
-    }
     if (path === '/api/onboarding/join') {
       if (typeof body.token !== 'string' || !tokenPattern.test(body.token)) return new Response(null, { status: 400 })
       const hash = await tokenHash(body.token)

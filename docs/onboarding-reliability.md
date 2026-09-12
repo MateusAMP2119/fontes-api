@@ -2,7 +2,7 @@
 
 The bootstrap response now includes `passwordRequired`, `hasPassword`, `canInvite`, `canEditWorkspace`, `accessLost` and the last `operationId`. Existing verified OTP-only users without a Google identity require password setup. Existing Google users can continue without a password. Onboarding and invitation acceptance reject incomplete credential setup.
 
-`POST /api/onboarding/password` takes `{ "newPassword": "..." }`. It requires a trusted origin, verified user and a session created within 15 minutes. It delegates hashing and storage to Better Auth's server-only setPassword operation. An existing password cannot be overwritten by this route; password reset and change use the established Better Auth endpoints. The password is never an onboarding field or queued write.
+`POST /api/auth/set-password` requires a verified session, `currentPassword` and `newPassword`. An empty current password is accepted only for first setup, with a session created within 15 minutes. Existing passwords require the correct current password. Better Auth handles hashing, storage and optional session revocation. Recovery uses the separate email reset flow. The app advances immediately and keeps the pending password only in memory.
 
 `POST /api/onboarding/join` validates token expiry, recipient identity and the creator's current owner/admin membership before adding membership. Expired copied invite links return 410 when reissued instead of incorrectly reporting ready. The unused invitation-preview endpoint has been removed.
 

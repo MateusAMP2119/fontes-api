@@ -17,7 +17,7 @@ All paths below are relative to `/api/auth`.
 | GET | `/oauth-proxy-callback` | Complete local OAuth handoff. |
 | GET | `/error` | OAuth error fallback. |
 | POST | `/sign-out` | End the current session. |
-| POST | `/change-password` | Change a password. |
+| POST | `/set-password` | Set or change a password; currentPassword is required (empty only for first setup). |
 | POST | `/request-password-reset` | Send a recovery email. |
 | GET | `/reset-password/:token` | Follow the recovery email link. |
 | POST | `/reset-password` | Set a password using a recovery token. |
@@ -39,7 +39,6 @@ Google's OAuth redirect URI is a separate server setting: `https://builder.fonte
 | --- | --- | --- |
 | GET | `/api/onboarding` | Read profile, workspace, default project and setup state. |
 | POST | `/api/onboarding` | Save setup, profile and preferences; create the initial workspace/project if needed. |
-| POST | `/api/onboarding/password` | Set the first password. |
 | POST | `/api/onboarding/invite` | Create or send a token-based invitation. |
 | POST | `/api/onboarding/join` | Accept a token-based invitation. |
 | GET | `/api/briefing` | Read the latest saved briefing with a verified session bearer token. |

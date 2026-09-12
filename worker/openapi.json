@@ -251,62 +251,6 @@
         }
       }
     },
-    "/api/onboarding/password": {
-      "post": {
-        "tags": [
-          "Onboarding"
-        ],
-        "summary": "Set the first password",
-        "security": [
-          {
-            "sessionBearer": []
-          },
-          {
-            "sessionCookie": []
-          },
-          {
-            "secureSessionCookie": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response."
-          },
-          "400": {
-            "description": "Invalid input."
-          },
-          "401": {
-            "description": "Verified session required."
-          },
-          "403": {
-            "description": "Trusted origin or workspace permission required."
-          },
-          "409": {
-            "description": "Setup conflict."
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "newPassword": {
-                    "type": "string",
-                    "minLength": 8,
-                    "maxLength": 128
-                  }
-                },
-                "required": [
-                  "newPassword"
-                ]
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/onboarding/invite": {
       "post": {
         "tags": [

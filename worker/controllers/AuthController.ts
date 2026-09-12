@@ -63,12 +63,12 @@ const GET_PATHS = new Set([
 const POST_PATHS = new Set([
   '/api/auth/sign-in/social', '/api/auth/sign-in/email', '/api/auth/sign-in/email-otp',
   '/api/auth/email-otp/send-verification-otp', '/api/auth/sign-out',
-  '/api/auth/change-password', '/api/auth/reset-password', '/api/auth/request-password-reset',
+  '/api/auth/set-password', '/api/auth/reset-password', '/api/auth/request-password-reset',
 ])
 
 export class AuthController {
   private auth: ReturnType<typeof AuthController.createAuth>
-  constructor(env: WorkerEnv, context: ExecutionContext) {
+  constructor(private env: WorkerEnv, context: ExecutionContext) {
     // Request-scoped: never retain an execution context or D1 binding globally.
     this.auth = AuthController.createAuth(env, promise => context.waitUntil(promise))
   }
@@ -88,11 +88,29 @@ export class AuthController {
     if (/^\/api\/auth\/reset-password\/[^/]+$/.test(path)) return 'GET'
   }
 
-  handle(request: Request) {
+  async handle(request: Request) {
     const path = new URL(request.url).pathname
     const method = AuthController.publicMethod(path)
     if (!method) return new Response(null, { status: 404 })
     if (request.method !== method) return new Response(null, { status: 405, headers: { Allow: method } })
+    if (path === '/api/auth/set-password') {
+      const origin = request.headers.get('origin')
+      if (origin ? !AuthController.isTrustedOrigin(origin, this.env) : !/^Bearer\s+\S+$/i.test(request.headers.get('authorization') ?? '')) return new Response(null, { status: 403 })
+      const session = await this.session(request)
+      if (!session?.user.emailVerified) return Response.json({ message: 'Confirmação de email necessária.' }, { status: 401 })
+      let body
+      try { body = await request.json() as Record<string, unknown> } catch { return new Response(null, { status: 400 }) }
+      if (!body || typeof body.currentPassword !== 'string' || typeof body.newPassword !== 'string'
+        || (body.revokeOtherSessions !== undefined && typeof body.revokeOtherSessions !== 'boolean')) return Response.json({ message: 'Palavra-passe atual e nova obrigatórias.' }, { status: 400 })
+      if (body.currentPassword === '') {
+        const created = new Date(session.session.createdAt).getTime()
+        if (!Number.isFinite(created) || Date.now() - created > 15 * 60 * 1000) return Response.json({ message: 'Nova autenticação necessária.', step: 'email' }, { status: 401 })
+        return this.auth.api.setPassword({ headers: request.headers, body: { newPassword: body.newPassword }, asResponse: true })
+      }
+      const url = new URL(request.url)
+      url.pathname = '/api/auth/change-password'
+      return this.auth.handler(new Request(url, { method: 'POST', headers: request.headers, body: JSON.stringify(body) }))
+    }
     return this.auth.handler(request)
   }
   setPassword(request: Request, newPassword: string) {
@@ -103,7 +121,7 @@ export class AuthController {
     if (request.method !== 'GET') return new Response(null, { status: 405, headers: { Allow: 'GET' } })
     const generated = await this.auth.api.generateOpenAPISchema()
     const paths = Object.fromEntries(Object.entries(generated.paths).flatMap(([path, operations]) => {
-      const fullPath = '/api/auth' + path
+      const fullPath = '/api/auth' + (path === '/change-password' ? '/set-password' : path)
       const method = AuthController.publicMethod(fullPath.replace('{id}', 'google'))?.toLowerCase()
       if (!method || !(method in operations)) return []
       const operation = operations[method as keyof typeof operations]
@@ -117,6 +135,7 @@ export class AuthController {
         '/sign-in/email-otp': 'Verify registration code',
         '/sign-in/email': 'Sign in with password',
         '/get-session': 'Read current session',
+        '/change-password': 'Set password',
       }
       const codePurpose = operation.requestBody?.content?.['application/json']?.schema?.properties?.type
       if (path === '/email-otp/send-verification-otp' && codePurpose) {
@@ -126,6 +145,9 @@ export class AuthController {
       if (path === '/email-otp/send-verification-otp') operation.description = 'Sends a six-digit code for a new account, valid for 10 minutes.'
       if (path === '/sign-in/email-otp') operation.description = 'Verifies a new account and returns its first session token. Existing accounts use password or Google.'
       if (path === '/sign-in/email') operation.description = 'Returns a session token for an existing account.'
+      if (path === '/change-password') {
+        operation.description = 'Requires a verified session and currentPassword. Use an empty string only when no password exists.'
+      }
       if (path === '/get-session') operation.description = 'Returns the current session and user, or null.'
       operation.tags = [path.includes('password') ? 'Passwords'
         : ['/get-session', '/sign-out'].includes(path) ? 'Sessions'

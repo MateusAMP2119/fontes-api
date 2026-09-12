@@ -63,17 +63,11 @@ test('invites use hashed tokens, repeat sends are deduplicated and email is boun
  f.sql.exec('UPDATE onboardingInvite SET expiresAt=0');assert.equal((await f.call('/join',{token})).status,403);f.sql.close()
 })
 
-test('email users require password setup; verified fresh session sets it once',async()=>{
+test('email users require password setup before workspace creation',async()=>{
  const f=fixture();f.sql.exec("DELETE FROM account WHERE userId='u'")
  assert.equal((await (await f.call()).json()).passwordRequired,true)
  assert.equal((await f.call('',f.setup)).status,400)
- assert.equal((await f.call('/password',{newPassword:'short'})).status,400)
- assert.equal((await f.call('/password',{newPassword:'valid-password-123'})).status,200)
- assert.equal((await (await f.call()).json()).passwordRequired,false)
- assert.equal((await f.call('/password',{newPassword:'replacement-password'})).status,409)
- assert.equal((await f.call('',f.setup)).status,200)
- f.identity({user:{id:'u',email:'u@example.com',emailVerified:true},session:{id:'s',createdAt:'2020-01-01'}})
- assert.equal((await f.call('/password',{newPassword:'valid-password-123'})).status,401)
+ assert.equal((await f.call('/password',{newPassword:'valid-password-123'})).status,404)
  f.sql.close()
 })
 test('Google-only accounts do not require a password',async()=>{
