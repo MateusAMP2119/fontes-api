@@ -34,7 +34,10 @@ test('production auth config supports OTP migration, password login, reset and s
 test('set-password requires current password, with empty input only for first setup',async()=>{
  const f=fixture(),email='first-password@example.com'
  await f.call('/email-otp/send-verification-otp',{email,type:'sign-in'});await Promise.all(f.pending)
- const registered=await f.call('/sign-in/email-otp',{email,otp:f.env.messages[0].code})
+ const registration=f.request('/sign-in/email-otp',{email,otp:f.env.messages[0].code})
+ registration.headers.set('cf-connecting-ip','203.0.113.42')
+ const registered=await f.auth.handle(registration)
+ assert.equal((await f.auth.session(f.request('/get-session',undefined,cookies(registered)))).session.ipAddress,'203.0.113.42')
  let cookie=cookies(registered)
  assert.equal((await f.call('/set-password',{password:'','new-password':'valid-password-123'})).status,401)
  assert.equal((await f.call('/set-password',{'new-password':'valid-password-123'},cookie)).status,400)
@@ -51,11 +54,14 @@ test('set-password requires current password, with empty input only for first se
  const previousToken=initial.token
  const request=f.request('/set-password',{password:'valid-password-123','new-password':'replacement-password',revokeOtherSessions:false})
  request.headers.set('authorization',`Bearer ${previousToken}`)
+ request.headers.set('cf-connecting-ip','203.0.113.43')
+ request.headers.set('x-forwarded-for','198.51.100.99')
  const changed=await f.auth.handle(request)
  assert.equal(changed.status,200)
  const replacement=await changed.json()
  assert.notEqual(replacement.token,previousToken)
  assert.equal(replacement.session.token,replacement.token)
+ assert.equal(replacement.session.ipAddress,'203.0.113.43')
  assert.equal(replacement.user.email,email)
  assert.equal(f.env.store.session.length,1,'only the replacement session remains, even if an old client sends false')
  assert.equal(await f.auth.session(f.request('/get-session',undefined,cookie)),null)

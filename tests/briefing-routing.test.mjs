@@ -47,9 +47,9 @@ test('root and docs remain public while the schema includes only retained API op
   }
   assert.equal(schema.components.securitySchemes.sessionBearer.scheme, 'bearer')
   assert.equal(schema.components.securitySchemes.briefingBearer, undefined)
-  assert.deepEqual(schema.tags.map(tag => tag.name), ['Authentication', 'Sessions', 'Email verification', 'Onboarding', 'Briefing'])
+  assert.deepEqual(schema.tags.map(tag => tag.name), ['Authentication', 'Email verification', 'Onboarding', 'Briefing'])
   const expectedTags = {
-    '/api/auth/sign-in/social': 'Authentication', '/api/auth/get-session': 'Sessions',
+    '/api/auth/sign-in/social': 'Authentication', '/api/auth/get-session': 'Authentication',
     '/api/auth/set-password': 'Authentication', '/api/auth/verify-email': 'Email verification',
     '/api/onboarding': 'Onboarding', '/api/briefing': 'Briefing',
   }

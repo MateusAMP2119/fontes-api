@@ -173,8 +173,7 @@ export class AuthController {
         operation.description = 'Requires a verified session and password. Use an empty string only when no password exists. Replaces all sessions and returns the new token, session and user.'
       }
       if (path === '/get-session') operation.description = 'Returns the current session and user, or null.'
-      operation.tags = [['/get-session', '/sign-out'].includes(path) ? 'Sessions'
-        : path === '/verify-email' ? 'Email verification' : 'Authentication']
+      operation.tags = [path === '/verify-email' ? 'Email verification' : 'Authentication']
       if (path === '/sign-in/social') {
         operation.description = 'Starts Google sign-in. callbackURL is the return address, e.g. https://app.fonteslabs.com/.'
       }
@@ -184,7 +183,7 @@ export class AuthController {
       return [[fullPath.replace('{id}', 'google'), { [method]: { ...operation, security, ...(labels[path] ? { summary: labels[path] } : {}) } }]]
     }))
     return Response.json({ ...generated, info: custom.info, servers: [{ url: '/' }], security: [],
-      tags: [...['Authentication', 'Sessions', 'Email verification'].map(name => ({ name })), ...custom.tags],
+      tags: [...['Authentication', 'Email verification'].map(name => ({ name })), ...custom.tags],
       paths: { ...paths, ...custom.paths },
       components: { ...generated.components, securitySchemes: custom.components.securitySchemes },
     })
@@ -330,6 +329,7 @@ export class AuthController {
         },
       },
       advanced: {
+        ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
         backgroundTasks: { handler: waitUntil },
         defaultCookieAttributes: {
           // Safari drops Secure cookies over plain http://localhost, so follow the base URL's scheme.
