@@ -17,7 +17,7 @@ All paths below are relative to `/api/auth`.
 | POST | `/sign-out` | End the current session. |
 | POST | `/set-password` | Set password. Requires a verified session and the current password, or an empty password for first setup. |
 | POST | `/request-password-reset` | Send recovery email. Starts recovery without a session or current password. |
-| GET | `/reset-password/:token` | Validate recovery link. Checks the token and redirects to the app form; does not change the password. |
+| GET | `/reset-password/:token` | Verify recovery link. Checks the token and redirects to the app form; does not change the password. |
 | POST | `/reset-password` | Reset forgotten password. Uses a single-use recovery token and revokes existing sessions; no session or current password required. |
 
 `AuthController.publicMethod` defines the public auth surface. Better Auth core and email OTP still provide server-side implementation, but unlisted HTTP routes are rejected before invoking their handlers. The organization and JWT plugins have been removed. OpenAPI generation is used only for the filtered documentation schema. The existing `session.activeOrganizationId` column is retained as a server-controlled additional field so workspace restoration and onboarding keep working. `auth.api.setPassword` is a server-only operation called by onboarding.
