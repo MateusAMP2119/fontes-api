@@ -122,7 +122,7 @@ test('queued setup cannot modify a different active workspace',async()=>{
 
 test('retired onboarding routes return 404 before session or database work',async()=>{
  const controller=new OnboardingController({}, {session:async()=>{throw new Error('must not authenticate')}})
- for (const path of ['/availability','/invitation']) {
+ for (const path of ['/availability']) {
   for (const method of ['GET','POST']) {
    const response=await controller.handle(new Request('https://api.fonteslabs.com/api/onboarding'+path,{method}))
    assert.equal(response.status,404)
@@ -183,5 +183,53 @@ test('first profile supplies a username while later profile edits preserve it',a
  assert.equal(f.sql.prepare("SELECT username FROM user WHERE id='u'").get().username,'mateuscosta')
  assert.equal((await f.call('',{...f.setup,revision:2,operationId:'operation-second',profileName:'Other Name'})).status,200)
  assert.equal(f.sql.prepare("SELECT username FROM user WHERE id='u'").get().username,'mateuscosta')
+ f.sql.close()
+})
+
+test('workspace listing uses onboarding organizations and excludes non-memberships', async () => {
+ const f=fixture(); await f.call('',f.setup)
+ f.sql.exec("INSERT INTO organization VALUES ('other','Other','other-team',0)")
+ const response=await f.call('/workspaces'); assert.equal(response.status,200)
+ const {workspaces}=await response.json(); assert.equal(workspaces.length,1); assert.equal(workspaces[0].name,'Fontes'); assert.equal(workspaces[0].slug,'fontes-team')
+ f.sql.close()
+})
+test('workspace selection persists membership-checked session and next-login selection', async () => {
+ const f=fixture(); await f.call('',f.setup)
+ f.sql.exec("INSERT INTO organization VALUES ('second','Second','second-team',1); INSERT INTO member VALUES ('m2','second','u','member',1)")
+ const response=await f.call('/workspaces/select',{organizationId:'second'}); assert.equal(response.status,200)
+ assert.equal((await response.json()).organization.id,'second')
+ assert.equal(f.sql.prepare("SELECT activeOrganizationId FROM session WHERE id='s'").get().activeOrganizationId,'second')
+ assert.equal((await f.organizations.resumeFor('u')).organizationId,'second')
+ const revision=f.sql.prepare("SELECT revision FROM onboarding WHERE userId='u'").get().revision
+ await f.call('/workspaces/select',{organizationId:'second'})
+ assert.equal(f.sql.prepare("SELECT revision FROM onboarding WHERE userId='u'").get().revision,revision)
+ f.sql.close()
+})
+test('workspace selection rejects outsiders, malformed ids and untrusted origins', async () => {
+ const f=fixture(); await f.call('',f.setup)
+ f.sql.exec("INSERT INTO organization VALUES ('other','Other','other-team',0)")
+ assert.equal((await f.call('/workspaces/select',{organizationId:'other'})).status,403)
+ assert.equal((await f.call('/workspaces/select',{organizationId:42})).status,400)
+ assert.equal((await f.call('/workspaces/select',{organizationId:'other'},'https://untrusted.example')).status,403)
+ assert.equal(f.sql.prepare("SELECT activeOrganizationId FROM session WHERE id='s'").get().activeOrganizationId,'onboarding_u')
+ f.identity(null); assert.equal((await f.call('/workspaces')).status,401)
+ f.sql.close()
+})
+
+test('invitation review validates access without membership or workspace mutations', async () => {
+ const f=fixture();await f.call('',f.setup);const token='bc'.repeat(32)
+ await f.call('/invite',{token,email:'v@example.com',organizationId:'onboarding_u'})
+ assert.equal((await f.call('/invitation',{token})).status,403)
+ f.identity({user:{id:'v',email:'v@example.com',emailVerified:true},session:{id:'sv',activeOrganizationId:null}})
+ const before=f.sql.prepare('SELECT * FROM session WHERE id=?').get('sv')
+ assert.deepEqual(await (await f.call('/invitation',{token})).json(),{name:'Fontes',role:'member'})
+ assert.equal(f.sql.prepare("SELECT count(*) n FROM member WHERE userId='v'").get().n,0)
+ assert.equal(f.sql.prepare("SELECT count(*) n FROM onboarding WHERE userId='v'").get().n,0)
+ assert.deepEqual(f.sql.prepare('SELECT * FROM session WHERE id=?').get('sv'),before)
+ f.sql.exec("UPDATE member SET role='member'")
+ assert.equal((await f.call('/invitation',{token})).status,403)
+ f.sql.exec("UPDATE member SET role='owner'; UPDATE onboardingInvite SET expiresAt=0")
+ assert.equal((await f.call('/invitation',{token})).status,403)
+ assert.equal((await f.call('/invitation',{token:'bad'})).status,400)
  f.sql.close()
 })

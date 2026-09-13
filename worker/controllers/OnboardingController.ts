@@ -25,7 +25,7 @@ export class OnboardingController {
 
   async handle(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname
-    if (!['/api/onboarding', '/api/onboarding/invite', '/api/onboarding/join'].includes(path)) return new Response(null, { status: 404 })
+    if (!['/api/onboarding', '/api/onboarding/invite', '/api/onboarding/join', '/api/onboarding/invitation', '/api/onboarding/workspaces', '/api/onboarding/workspaces/select'].includes(path)) return new Response(null, { status: 404 })
     if (request.method !== 'GET' && request.method !== 'POST') return new Response(null, { status: 405 })
     if (request.method === 'POST' && !AuthController.isTrustedOrigin(request.headers.get('origin'), this.env)) return new Response(null, { status: 403 })
     const session = await this.auth.session(request)
@@ -33,6 +33,10 @@ export class OnboardingController {
     const userId = session.user.id
     const db = this.env.APP_DB
     if (request.method === 'GET') {
+      if (path === '/api/onboarding/workspaces') {
+        const { results } = await db.prepare('SELECT o.id, o.name, o.slug FROM organization o WHERE EXISTS (SELECT 1 FROM member m WHERE m.organizationId = o.id AND m.userId = ?) ORDER BY o.name, o.id').bind(userId).all<{ id: string; name: string; slug: string }>()
+        return Response.json({ workspaces: results })
+      }
       if (path !== '/api/onboarding') return new Response(null, { status: 405 })
       return Response.json(await this.bootstrap(userId, session.session.activeOrganizationId))
     }
@@ -44,12 +48,27 @@ export class OnboardingController {
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('body')
       body = parsed as Record<string, unknown>
     } catch { return Response.json({ message: 'Pedido inválido.' }, { status: 400 }) }
-    if (path === '/api/onboarding/join') {
+    if (path === '/api/onboarding/workspaces') return new Response(null, { status: 405 })
+    if (path === '/api/onboarding/workspaces/select') {
+      if (typeof body.organizationId !== 'string' || !body.organizationId || body.organizationId.length > 200) return Response.json({ message: 'Ambiente de trabalho inválido.' }, { status: 400 })
+      const member = await db.prepare('SELECT id FROM member WHERE userId = ? AND organizationId = ?').bind(userId, body.organizationId).first()
+      if (!member) return Response.json({ message: 'Sem acesso a este ambiente de trabalho.' }, { status: 403 })
+      await db.batch([
+        db.prepare(`UPDATE session SET activeOrganizationId = ? WHERE id = ? AND userId = ? AND EXISTS (SELECT 1 FROM member WHERE userId = ? AND organizationId = ?)`)
+          .bind(body.organizationId, session.session.id, userId, userId, body.organizationId),
+        db.prepare(`INSERT INTO onboarding (userId, organizationId, operationId) SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM member WHERE userId = ? AND organizationId = ?)
+          ON CONFLICT(userId) DO UPDATE SET organizationId = excluded.organizationId, revision = onboarding.revision + 1, operationId = excluded.operationId WHERE onboarding.organizationId != excluded.organizationId`)
+          .bind(userId, body.organizationId, crypto.randomUUID(), userId, body.organizationId),
+      ])
+      return Response.json(await this.bootstrap(userId, body.organizationId))
+    }
+    if (path === '/api/onboarding/join' || path === '/api/onboarding/invitation') {
       if (typeof body.token !== 'string' || !tokenPattern.test(body.token)) return new Response(null, { status: 400 })
       const hash = await tokenHash(body.token)
       const invite = await db.prepare("SELECT i.organizationId, o.name FROM onboardingInvite i JOIN organization o ON o.id = i.organizationId WHERE i.tokenHash = ? AND i.expiresAt > ? AND (i.email IS NULL OR i.email = ?) AND EXISTS (SELECT 1 FROM member m WHERE m.organizationId = i.organizationId AND m.userId = i.creatorId AND m.role IN ('owner', 'admin'))")
         .bind(hash, Date.now(), session.user.email.toLowerCase()).first<{ organizationId: string; name: string }>()
       if (!invite) return Response.json({ message: 'O convite expirou ou pertence a outro email.' }, { status: 403 })
+      if (path === '/api/onboarding/invitation') return Response.json({ name: invite.name, role: 'member' })
       const credentials = await this.credentials(userId)
       if (credentials.passwordRequired) return Response.json({ message: 'Palavra-passe por definir.', step: 'password' }, { status: 400 })
       await db.batch([

@@ -3,7 +3,7 @@
   "info": {
     "title": "Fontes App API",
     "version": "0.1.2",
-    "description": "Authentication, onboarding and briefings."
+    "description": "Authentication, onboarding, briefings and news rankings."
   },
   "servers": [
     {
@@ -17,6 +17,9 @@
     },
     {
       "name": "Briefing"
+    },
+    {
+      "name": "Rankings"
     }
   ],
   "paths": {
@@ -338,6 +341,454 @@
         "responses": {
           "200": {
             "description": "Successful response."
+          },
+          "400": {
+            "description": "Invalid input."
+          },
+          "401": {
+            "description": "Verified session required."
+          },
+          "403": {
+            "description": "Trusted origin or workspace permission required."
+          },
+          "409": {
+            "description": "Setup conflict."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  }
+                },
+                "required": [
+                  "token"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rankings": {
+      "get": {
+        "tags": [
+          "Rankings"
+        ],
+        "summary": "Read top writers, categories and entities",
+        "description": "General news rankings for an explicit half-open discovery period of at most 31 days. Requires a verified session bearer token. Writers include stored agency and newsroom bylines. Categories are publisher labels. Mentions count distinct summarized events with at least one article collected in the period, not literal mentions in articles. Each list is ordered by count descending, then numeric ID ascending. Responses are private and not cached. All response timestamps are Unix seconds. With sort=growth, entries include previous_count, growth_percent (null for no previous activity) and activity (24 equal-duration buckets in chronological order). Sort is growth descending with nulls last, then count descending, then ID. A summarized event is assigned to its earliest collected article within each period so its buckets sum to its count.",
+        "security": [
+          {
+            "sessionBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "description": "Inclusive start. Whole-second RFC 3339 timestamp, matching briefing interval rules.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "example": "2026-09-11T00:00:00Z"
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": true,
+            "description": "Exclusive end, no later than now.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "example": "2026-09-12T00:00:00Z"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10
+            },
+            "description": "Maximum entries in each list."
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "count",
+                "growth",
+                "volume"
+              ],
+              "default": "count"
+            },
+            "description": "Growth compares the selected period with the preceding equal period, ranking globally before the limit. New entries with no baseline follow measured changes."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rankings and coverage totals. Empty lists mean no matching data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "version",
+                    "scope",
+                    "timestamp_basis",
+                    "generated_at",
+                    "latest_discovery",
+                    "period",
+                    "totals",
+                    "writers",
+                    "categories",
+                    "mentions"
+                  ],
+                  "properties": {
+                    "version": {
+                      "const": 1
+                    },
+                    "scope": {
+                      "const": "general"
+                    },
+                    "timestamp_basis": {
+                      "const": "discovered_at"
+                    },
+                    "generated_at": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "latest_discovery": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ],
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "period": {
+                      "type": "object",
+                      "required": [
+                        "from",
+                        "until"
+                      ],
+                      "properties": {
+                        "from": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "until": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      }
+                    },
+                    "totals": {
+                      "type": "object",
+                      "required": [
+                        "articles",
+                        "events"
+                      ],
+                      "properties": {
+                        "articles": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "events": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      }
+                    },
+                    "writers": {
+                      "type": "array",
+                      "maxItems": 50,
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "rank",
+                          "count",
+                          "unit"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1000
+                          },
+                          "rank": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                          },
+                          "unit": {
+                            "const": "articles"
+                          },
+                          "previous_count": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "growth_percent": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "description": "Percentage change, rounded to one decimal; null if previous_count is zero."
+                          },
+                          "activity": {
+                            "type": "array",
+                            "minItems": 24,
+                            "maxItems": 24,
+                            "items": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "description": "Chronological equal-duration buckets summing to the current count."
+                          }
+                        }
+                      }
+                    },
+                    "categories": {
+                      "type": "array",
+                      "maxItems": 50,
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "rank",
+                          "count",
+                          "unit"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1000
+                          },
+                          "rank": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                          },
+                          "unit": {
+                            "const": "articles"
+                          },
+                          "previous_count": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "growth_percent": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "description": "Percentage change, rounded to one decimal; null if previous_count is zero."
+                          },
+                          "activity": {
+                            "type": "array",
+                            "minItems": 24,
+                            "maxItems": 24,
+                            "items": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "description": "Chronological equal-duration buckets summing to the current count."
+                          }
+                        }
+                      }
+                    },
+                    "mentions": {
+                      "type": "array",
+                      "maxItems": 50,
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "name",
+                          "rank",
+                          "count",
+                          "unit",
+                          "kind",
+                          "slug"
+                        ],
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                          },
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 1000
+                          },
+                          "rank": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 50
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                          },
+                          "unit": {
+                            "const": "events"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "person",
+                              "org",
+                              "location"
+                            ]
+                          },
+                          "slug": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 1000
+                          },
+                          "previous_count": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "growth_percent": {
+                            "type": [
+                              "number",
+                              "null"
+                            ],
+                            "description": "Percentage change, rounded to one decimal; null if previous_count is zero."
+                          },
+                          "activity": {
+                            "type": "array",
+                            "minItems": 24,
+                            "maxItems": 24,
+                            "items": {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            "description": "Chronological equal-duration buckets summing to the current count."
+                          }
+                        }
+                      }
+                    },
+                    "sort": {
+                      "description": "Present for growth or volume ordering.",
+                      "enum": [
+                        "growth",
+                        "volume"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing, duplicate, unknown or invalid query parameters."
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked session bearer token."
+          },
+          "403": {
+            "description": "Verified email required."
+          },
+          "405": {
+            "description": "Only GET is supported."
+          },
+          "503": {
+            "description": "API not configured or news service unavailable, timed out, rate limited or returned invalid data."
+          }
+        }
+      }
+    },
+    "/api/onboarding/invitation": {
+      "post": {
+        "tags": [
+          "Onboarding"
+        ],
+        "summary": "Review a workspace invitation without joining",
+        "security": [
+          {
+            "sessionBearer": []
+          },
+          {
+            "sessionCookie": []
+          },
+          {
+            "secureSessionCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated invitation workspace and role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "role"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "member"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid input."

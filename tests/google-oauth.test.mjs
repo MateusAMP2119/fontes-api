@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { fixture as authFixture } from './helpers/auth.mjs'
+import { fixture as authFixture, AuthController } from './helpers/auth.mjs'
 
 const cloud = 'https://api.fonteslabs.com'
 const local = 'http://127.0.0.1:8788'
@@ -55,3 +55,9 @@ test('cloud keeps the direct callback and rejects a missing state cookie', async
   assert.match(rejected.headers.get('location'), /state_mismatch/)
   assert.ok(rejected.headers.get('location').startsWith('https://app.fonteslabs.com/google-auth.html?'))
 })
+
+ test('numeric loopback frontend is trusted only by the matching development API', () => {
+  assert.equal(AuthController.isTrustedOrigin('http://127.0.0.1:5173', { BETTER_AUTH_URL: local }), true)
+  assert.equal(AuthController.isTrustedOrigin('http://127.0.0.1:5173', { BETTER_AUTH_URL: cloud }), false)
+  assert.equal(AuthController.isTrustedOrigin('http://127.0.0.1:5174', { BETTER_AUTH_URL: local }), false)
+ })

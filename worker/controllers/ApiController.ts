@@ -1,5 +1,6 @@
 import { OnboardingController } from './OnboardingController'
 import { BriefingController } from './BriefingController'
+import { RankingsController } from './RankingsController'
 import { AuthController, type WorkerEnv } from './AuthController'
 
 export class ApiController {
@@ -11,7 +12,7 @@ export class ApiController {
     const path = new URL(request.url).pathname
     if (path === '/') return Response.redirect(new URL('/api/auth/docs', request.url).toString(), 302)
     if (path.replace(/\/+$/, '') === '/api/auth/docs') return AuthController.page(request)
-    if (path !== '/api/auth/openapi.json' && !AuthController.publicMethod(path) && !path.startsWith('/api/onboarding') && path !== '/api/briefing' && path !== '/api/briefing/generate') return new Response(null, { status: 404 })
+    if (path !== '/api/auth/openapi.json' && !AuthController.publicMethod(path) && !path.startsWith('/api/onboarding') && path !== '/api/briefing' && path !== '/api/briefing/generate' && path !== '/api/briefing/feedback' && path !== '/api/rankings') return new Response(null, { status: 404 })
     const env = this.env
     const base = URL.parse(env.BETTER_AUTH_URL ?? 'https://api.fonteslabs.com')
     if (!base || (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(base.hostname))) || (env.BETTER_AUTH_SECRET?.length ?? 0) < 32) {
@@ -23,6 +24,7 @@ export class ApiController {
       }
       const auth = new AuthController(env, this.context)
       if (path === '/api/auth/openapi.json') return await auth.documentation(request)
+      if (path === '/api/rankings') return await new RankingsController(env, auth).handle(request)
       if (path.startsWith('/api/briefing')) return await new BriefingController(env, auth).handle(request)
       if (path.startsWith('/api/onboarding')) return await new OnboardingController(env, auth).handle(request)
       return await auth.handle(request)

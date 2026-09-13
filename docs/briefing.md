@@ -25,3 +25,16 @@ Timestamps must include a timezone and whole-second precision. The interval must
 The AI binding, news facts URL, version metadata and existing `fontes-briefings` D1 binding belong to the API configuration. The copied migration files document the existing schema; consolidation requires no remote migration. Never recreate or delete this database. fontes-ews continues reading briefing_windows without changes.
 
 The model, prompt, source interval checks, exact-count validation, leases, history, usage accounting and error handling are preserved from fontes-ebs commit e8e0fe1. Tests mock source fetches and inference. Run `npm run check` before deployment.
+
+## Briefing feedback
+
+`GET /api/briefing/feedback?generation_id=<id>` returns `{ "rating": null }`,
+`"up"`, or `"down"` for the authenticated account. `POST` to the same URL
+accepts `{ "rating": "up" }`, `{ "rating": "down" }`, or `{ "rating": null }`
+to save, change, or remove the rating. Both requests require the verified session
+bearer token. Account identity comes only from that session. Unknown or unfinished
+generations return 404. Invalid IDs or ratings return 400; storage failures return 503.
+Ratings are stored in `briefing_feedback` with one row per generation and account.
+Apply `briefing/migrations/0004_briefing_feedback.sql` to the existing briefing database
+before running this endpoint. The migration only adds the feedback table.
+The home refresh action reads the latest saved briefing without generating a new one.

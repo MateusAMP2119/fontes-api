@@ -29,9 +29,13 @@ const TRUSTED_ORIGINS = [
 ]
 
 function trustedOrigins(env: WorkerEnv) {
-  return env.BETTER_AUTH_URL && !TRUSTED_ORIGINS.includes(env.BETTER_AUTH_URL)
-    ? [...TRUSTED_ORIGINS, env.BETTER_AUTH_URL]
+  const local = env.BETTER_AUTH_URL && new URL(env.BETTER_AUTH_URL)
+  const origins = local && local.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(local.hostname)
+    ? [...TRUSTED_ORIGINS, `http://${local.hostname}:5173`]
     : TRUSTED_ORIGINS
+  return env.BETTER_AUTH_URL && !origins.includes(env.BETTER_AUTH_URL)
+    ? [...origins, env.BETTER_AUTH_URL]
+    : origins
 }
 
 // Pin the browser bundle so local and deployed docs use the same Scalar release.

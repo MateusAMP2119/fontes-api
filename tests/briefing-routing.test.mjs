@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 const source = readFileSync(new URL('../worker/controllers/ApiController.ts', import.meta.url), 'utf8').replace(/^import .*\n/gm, '')
 const js = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
-const imports = `import { BriefingController } from '${new URL('../worker/controllers/BriefingController.ts', import.meta.url).href}';\nimport { AuthController } from '${new URL('./helpers/auth.mjs', import.meta.url).href}';\nimport briefing from '${new URL('../briefing/index.ts', import.meta.url).href}';\n`
+const imports = `import { BriefingController } from '${new URL('../worker/controllers/BriefingController.ts', import.meta.url).href}';\nimport { RankingsController } from '${new URL('../worker/controllers/RankingsController.ts', import.meta.url).href}';\nimport { AuthController } from '${new URL('./helpers/auth.mjs', import.meta.url).href}';\nimport briefing from '${new URL('../briefing/index.ts', import.meta.url).href}';\n`
 const { ApiController } = await import('data:text/javascript;base64,' + Buffer.from(imports + js).toString('base64'))
 test('retired custom and auth routes return 404 before configuration or database access', async () => {
   const api = new ApiController({}, {})
@@ -31,7 +31,7 @@ test('root and docs remain public while the schema includes only retained API op
   const response = await configured.handle(new Request('https://api.fonteslabs.com/api/auth/openapi.json'))
   assert.equal(response.status, 200)
   const schema = await response.json()
-  assert.equal(Object.keys(schema.paths).length, 16)
+  assert.equal(Object.keys(schema.paths).length, 18)
   assert.deepEqual(schema.security, [])
   for (const path of ['/api/auth/email-otp/send-verification-otp', '/api/auth/sign-in/email-otp', '/api/auth/sign-in/email', '/api/auth/sign-in/social']) assert.deepEqual(schema.paths[path].post.security, [], path)
   assert.equal(schema.paths['/api/auth/sign-in/email-otp'].post.summary, 'Verify registration code')
@@ -42,17 +42,17 @@ test('root and docs remain public while the schema includes only retained API op
       }
     }
   }
-  for (const path of ['/api/briefing', '/api/briefing/generate']) {
+  for (const path of ['/api/briefing', '/api/briefing/generate', '/api/rankings']) {
     for (const operation of Object.values(schema.paths[path])) assert.deepEqual(operation.security, [{sessionBearer:[]}])
   }
   assert.equal(schema.components.securitySchemes.sessionBearer.scheme, 'bearer')
   assert.equal(schema.components.securitySchemes.briefingBearer, undefined)
-  assert.deepEqual(schema.tags.map(tag => tag.name), ['Authentication', 'Onboarding', 'Briefing'])
+  assert.deepEqual(schema.tags.map(tag => tag.name), ['Authentication', 'Onboarding', 'Briefing', 'Rankings'])
   for (const path of ['verify-email', 'oauth-proxy-callback', 'error']) assert.equal(schema.paths['/api/auth/' + path], undefined)
   const expectedTags = {
     '/api/auth/sign-in/social': 'Authentication', '/api/auth/get-session': 'Authentication',
     '/api/auth/set-password': 'Authentication',
-    '/api/onboarding': 'Onboarding', '/api/briefing': 'Briefing',
+    '/api/onboarding': 'Onboarding', '/api/onboarding/invitation': 'Onboarding', '/api/briefing': 'Briefing',
   }
   for (const [path, tag] of Object.entries(expectedTags)) {
     for (const operation of Object.values(schema.paths[path])) assert.deepEqual(operation.tags, [tag])
@@ -74,6 +74,36 @@ test('root and docs remain public while the schema includes only retained API op
   for (const path of ['/api/projects', '/api/auth/token', '/api/auth/organization/create', '/api/auth/sign-up/email', '/api/onboarding/availability']) assert.equal(schema.paths[path], undefined, path)
   const post = await configured.handle(new Request('https://api.fonteslabs.com/api/auth/openapi.json', {method:'POST'}))
   assert.equal(post.status, 405)
+})
+
+test('rankings route uses verified login bearer sessions without cookie fallback', async t => {
+  const { fixture, cookies } = await import('./helpers/auth.mjs')
+  const f = fixture({ NEWS_API_URL: 'https://news.example' })
+  const email = 'rankings@example.com'
+  await f.call('/email-otp/send-verification-otp', { email, type: 'sign-in' })
+  await Promise.all(f.pending)
+  const login = await f.call('/sign-in/email-otp', { email, otp: f.env.messages[0].code })
+  const cookie = cookies(login), { token } = await login.json()
+  const until = Math.floor(Date.now() / 1000) - 60, from = until - 86400
+  let calls = 0
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++
+    return Response.json({ version: 1, scope: 'general', period: { from, until }, timestamp_basis: 'discovered_at',
+      generated_at: Math.floor(Date.now() / 1000), latest_discovery: null, totals: { articles: 0, events: 0 }, writers: [], categories: [], mentions: [] })
+  })
+  const api = new ApiController(f.env, { waitUntil() {} })
+  const params = new URLSearchParams({ from: new Date(from * 1000).toISOString(), until: new Date(until * 1000).toISOString() })
+  const request = authorization => new Request('https://api.fonteslabs.com/api/rankings?' + params, { headers: { cookie, authorization } })
+  for (const authorization of ['', 'Bearer invalid', 'Basic ' + token]) assert.equal((await api.handle(request(authorization))).status, 401)
+  assert.equal(calls, 0)
+  assert.equal((await api.handle(request('Bearer ' + token))).status, 200)
+  f.env.store.user[0].emailVerified = false
+  assert.equal((await api.handle(request('Bearer ' + token))).status, 403)
+  f.env.store.user[0].emailVerified = true
+  f.env.store.session[0].expiresAt = new Date(0)
+  assert.equal((await api.handle(request('Bearer ' + token))).status, 401)
+  assert.equal(calls, 1)
+  assert.equal((await api.handle(new Request('https://api.fonteslabs.com/api/rankings/extra'))).status, 404)
 })
 
 test('both briefing routes accept login session bearer tokens and reject missing, expired or revoked sessions', async () => {

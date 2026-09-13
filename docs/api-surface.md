@@ -1,6 +1,6 @@
 # Public API surface
 
-Only routes used by fontes-app and their authentication/email dependencies are exposed, plus the retained briefing reader, generator and API documentation. All other application routes return 404. OPTIONS is handled centrally for CORS. Unsupported methods on retained routes return 405.
+Only routes used by fontes-app and their authentication/email dependencies are exposed, plus the retained briefing reader, generator, news rankings and API documentation. All other application routes return 404. OPTIONS is handled centrally for CORS. Unsupported methods on retained routes return 405.
 
 ## Authentication
 
@@ -32,16 +32,20 @@ Google sign-in is supported only on the production API. Failures return to the a
 
 Google's OAuth redirect URI is a separate server setting: `https://builder.fonteslabs.com/api/auth/callback/google`. That registered bridge forwards the provider response to `https://api.fonteslabs.com/api/auth/callback/google` before returning to the app's `callbackURL`.
 
-## Onboarding and briefings
+## Onboarding, briefings and rankings
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/api/onboarding` | Read profile, workspace, default project and setup state. |
 | POST | `/api/onboarding` | Save setup, profile and preferences; create the initial workspace/project if needed. |
 | POST | `/api/onboarding/invite` | Create or send a token-based invitation. |
+| POST | `/api/onboarding/invitation` | Validate a token and preview the workspace without joining. |
 | POST | `/api/onboarding/join` | Accept a token-based invitation. |
 | GET | `/api/briefing` | Read the latest saved briefing with a verified session bearer token. |
 | POST | `/api/briefing/generate` | Generate new briefing results using a verified session bearer token. |
+| GET | `/api/rankings` | Read top writers, categories and entities for a period with a verified session bearer token. |
+
+See [rankings contract](rankings.md) for counting rules and integration.
 
 See [briefing contract](briefing.md) for generation inputs and storage behavior.
 

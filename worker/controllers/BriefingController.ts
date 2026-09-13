@@ -1,3 +1,4 @@
+import { BriefingFeedbackController } from './BriefingFeedbackController.ts'
 import briefing from '../../briefing/index.ts'
 import type { AuthController, WorkerEnv } from './AuthController'
 const FRESH_SECONDS = 900
@@ -10,6 +11,7 @@ export class BriefingController {
   async handle(request: Request): Promise<Response> {
     const url = new URL(request.url)
     const path = url.pathname
+    if (path === '/api/briefing/feedback') return new BriefingFeedbackController(this.env, this.auth).handle(request)
     const generating = path === '/api/briefing/generate'
     if (path !== '/api/briefing' && !generating) return new Response(null, { status: 404 })
     const method = generating ? 'POST' : 'GET'
