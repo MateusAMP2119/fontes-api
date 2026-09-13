@@ -13,7 +13,7 @@ const js = ts.transpileModule(`const AuthController = { isTrustedOrigin: (origin
 const emailImport = `import { defaultUsername } from '${new URL('../worker/username.ts',import.meta.url).href}';
 import { sendTransactionalEmail, INVITE_SECONDS } from '${new URL('../worker/email/send.ts', import.meta.url).href}';\n`
 const { OnboardingController, OrganizationModel } = await import('data:text/javascript;base64,' + Buffer.from(emailImport + js).toString('base64'))
-function fixture() {
+function fixture(env = {}) {
  const sql = new DatabaseSync(':memory:')
  sql.exec(`PRAGMA foreign_keys=ON;
  CREATE TABLE user(id TEXT PRIMARY KEY, name TEXT, username TEXT UNIQUE, image TEXT, updatedAt INTEGER);
@@ -29,7 +29,7 @@ function fixture() {
  const db = { prepare(query) { let values=[]; return { bind(...args){values=args;return this}, async first(){return sql.prepare(query).get(...values)??null},async all(){return {results:sql.prepare(query).all(...values)}},async run(){return sql.prepare(query).run(...values)} } }, async batch(statements){sql.exec('BEGIN');try{const rows=[];for(const statement of statements)rows.push(await statement.run());sql.exec('COMMIT');return rows}catch(error){sql.exec('ROLLBACK');throw error}} }
  let identity={user:{id:'u',email:'u@example.com',emailVerified:true},session:{id:'s',activeOrganizationId:null,createdAt:new Date().toISOString()}}
  const emails=[]
- const controller=new OnboardingController({APP_DB:db,AUTH_EMAIL:{send:async email=>{emails.push(email);return {messageId:'test-invite'}}}},{session:async()=>identity,setPassword:async(request,password)=>{const existing=sql.prepare("SELECT id FROM account WHERE userId=? AND providerId='credential' AND password IS NOT NULL").get(identity.user.id);if(existing)throw Error('already set');sql.prepare("INSERT INTO account VALUES (?,?,'credential',?)").run('new-'+identity.user.id,identity.user.id,'hashed-in-auth-boundary')}})
+ const controller=new OnboardingController({...env,APP_DB:db,AUTH_EMAIL:{send:async email=>{emails.push(email);return {messageId:'test-invite'}}}},{session:async()=>identity,setPassword:async(request,password)=>{const existing=sql.prepare("SELECT id FROM account WHERE userId=? AND providerId='credential' AND password IS NOT NULL").get(identity.user.id);if(existing)throw Error('already set');sql.prepare("INSERT INTO account VALUES (?,?,'credential',?)").run('new-'+identity.user.id,identity.user.id,'hashed-in-auth-boundary')}})
  const call=(path='',body,origin='https://app.fonteslabs.com')=>controller.handle(new Request('https://api.fonteslabs.com/api/onboarding'+path,{method:body?'POST':'GET',headers:{origin,'content-type':'application/json'},body:body?JSON.stringify(body):undefined}))
  const setup={operationId:'operation-first',revision:1,name:'Fontes',slug:'fontes-team',profileName:'Mateus',completed:true,changelog:true,daily:false}
  return {sql,call,setup,emails,organizations:new OrganizationModel(db),identity:value=>{identity=value}}
@@ -233,3 +233,51 @@ test('invitation review validates access without membership or workspace mutatio
  assert.equal((await f.call('/invitation',{token:'bad'})).status,400)
  f.sql.close()
 })
+
+test('workspace creation is atomic, owned by the caller, selected and retry-safe', async () => {
+ const f=fixture(); await f.call('',f.setup)
+ const body={name:'Novo espaço',requestId:'d12d7789-542b-430d-8c6d-dd4f7ad159c0'}
+ const response=await f.call('/workspaces/create',body); assert.equal(response.status,200)
+ const state=await response.json(); assert.equal(state.organization.name,'Novo espaço'); assert.equal(state.project.organizationId,state.organization.id)
+ assert.equal(f.sql.prepare('SELECT role FROM member WHERE organizationId=? AND userId=?').get(state.organization.id,'u').role,'owner')
+ assert.equal(f.sql.prepare("SELECT activeOrganizationId FROM session WHERE id='s'").get().activeOrganizationId,state.organization.id)
+ assert.equal((await f.call('/workspaces/create',body)).status,200)
+ assert.equal(f.sql.prepare('SELECT count(*) n FROM organization').get().n,2)
+ assert.equal(f.sql.prepare('SELECT count(*) n FROM project').get().n,2)
+ f.sql.close()
+})
+test('workspace creation validates input and rejects untrusted origins', async () => {
+ const f=fixture(); await f.call('',f.setup)
+ assert.equal((await f.call('/workspaces/create',{name:' ',requestId:crypto.randomUUID()})).status,400)
+ assert.equal((await f.call('/workspaces/create',{name:'New',requestId:'invalid'})).status,400)
+ assert.equal((await f.call('/workspaces/create',{name:'New',requestId:crypto.randomUUID()},'https://untrusted.example')).status,403)
+ assert.equal(f.sql.prepare('SELECT count(*) n FROM organization').get().n,1)
+ f.sql.close()
+})
+
+for (const apiOrigin of ['https://api.fonteslabs.com', 'http://127.0.0.1:8788', 'http://localhost:8788']) {
+ test(`Google owner can invite an unregistered recipient with a link for ${apiOrigin}`, async () => {
+  const f=fixture({BETTER_AUTH_URL:apiOrigin})
+  f.sql.exec("DELETE FROM user WHERE id='v'; DELETE FROM account WHERE userId='v'; UPDATE account SET providerId='google', password=NULL WHERE userId='u'")
+  assert.equal((await f.call('',f.setup)).status,200)
+  const token='dc'.repeat(32)
+  assert.equal((await f.call('/invite',{token,email:'v@example.com',organizationId:'onboarding_u'})).status,200)
+  const email=await PostalMime.parse(f.emails[0].raw)
+  const appOrigin=apiOrigin.startsWith('http:') ? apiOrigin.replace(':8788',':5173') : 'https://app.fonteslabs.com'
+  assert.ok(email.html.includes(`${appOrigin}/?invite=${token}`))
+  assert.ok(email.text.includes(`${appOrigin}/?invite=${token}`))
+  assert.equal(f.sql.prepare("SELECT count(*) n FROM user WHERE id='v'").get().n,0)
+  f.sql.exec("INSERT INTO user VALUES ('v','New recipient',NULL,NULL,0)")
+  f.identity({user:{id:'v',email:'v@example.com',emailVerified:true},session:{id:'sv',activeOrganizationId:null}})
+  assert.equal((await f.call('/invitation',{token})).status,200)
+  assert.equal((await f.call('/join',{token})).status,400,'new email account still needs a password')
+  f.sql.exec("INSERT INTO account VALUES ('av','v','credential','test-hash')")
+  const joined=await (await f.call('/join',{token})).json()
+  assert.equal(joined.organization.id,'onboarding_u')
+  assert.equal(joined.canInvite,false)
+  const finished=await (await f.call('',{...f.setup,organizationId:joined.organization.id,revision:joined.revision+1,operationId:'finish-new-invitee',profileName:'New recipient'})).json()
+  assert.equal(finished.completed,true);assert.ok(finished.project)
+  assert.equal(f.sql.prepare('SELECT count(*) n FROM organization').get().n,1)
+  f.sql.close()
+ })
+}

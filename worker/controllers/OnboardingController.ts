@@ -25,7 +25,7 @@ export class OnboardingController {
 
   async handle(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname
-    if (!['/api/onboarding', '/api/onboarding/invite', '/api/onboarding/join', '/api/onboarding/invitation', '/api/onboarding/workspaces', '/api/onboarding/workspaces/select'].includes(path)) return new Response(null, { status: 404 })
+    if (!['/api/onboarding', '/api/onboarding/invite', '/api/onboarding/join', '/api/onboarding/invitation', '/api/onboarding/workspaces', '/api/onboarding/workspaces/select', '/api/onboarding/workspaces/create'].includes(path)) return new Response(null, { status: 404 })
     if (request.method !== 'GET' && request.method !== 'POST') return new Response(null, { status: 405 })
     if (request.method === 'POST' && !AuthController.isTrustedOrigin(request.headers.get('origin'), this.env)) return new Response(null, { status: 403 })
     const session = await this.auth.session(request)
@@ -49,6 +49,24 @@ export class OnboardingController {
       body = parsed as Record<string, unknown>
     } catch { return Response.json({ message: 'Pedido inválido.' }, { status: 400 }) }
     if (path === '/api/onboarding/workspaces') return new Response(null, { status: 405 })
+    if (path === '/api/onboarding/workspaces/create') {
+      if (typeof body.name !== 'string' || !body.name.trim() || body.name.length > 80 || typeof body.requestId !== 'string' || !/^[a-f0-9-]{36}$/.test(body.requestId)) return Response.json({ message: 'Nome do ambiente de trabalho inválido.' }, { status: 400 })
+      const credentials = await this.credentials(userId)
+      if (credentials.passwordRequired) return Response.json({ message: 'Palavra-passe por definir.', step: 'password' }, { status: 400 })
+      const id = `workspace_${userId}_${body.requestId}`
+      const now = Date.now()
+      const base = body.name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'ambiente'
+      const slug = `${base}-${(await tokenHash(id)).slice(0, 12)}`
+      await db.batch([
+        db.prepare('INSERT OR IGNORE INTO organization (id, name, slug, createdAt) VALUES (?, ?, ?, ?)').bind(id, body.name.trim(), slug, now),
+        db.prepare("INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt) VALUES (?, ?, ?, 'owner', ?)").bind(`owner_${id}`, id, userId, now),
+        db.prepare("INSERT OR IGNORE INTO project (id, organizationId, name, createdAt, ownerId, visibility) VALUES (?, ?, ?, ?, ?, 'private')").bind(`project_${id}`, id, body.name.trim(), new Date(now).toISOString(), userId),
+        db.prepare(`INSERT INTO onboarding (userId, organizationId, operationId) VALUES (?, ?, ?)
+          ON CONFLICT(userId) DO UPDATE SET organizationId = excluded.organizationId, revision = onboarding.revision + 1, operationId = excluded.operationId WHERE onboarding.organizationId != excluded.organizationId`).bind(userId, id, body.requestId),
+        db.prepare('UPDATE session SET activeOrganizationId = ? WHERE id = ? AND userId = ?').bind(id, session.session.id, userId),
+      ])
+      return Response.json(await this.bootstrap(userId, id))
+    }
     if (path === '/api/onboarding/workspaces/select') {
       if (typeof body.organizationId !== 'string' || !body.organizationId || body.organizationId.length > 200) return Response.json({ message: 'Ambiente de trabalho inválido.' }, { status: 400 })
       const member = await db.prepare('SELECT id FROM member WHERE userId = ? AND organizationId = ?').bind(userId, body.organizationId).first()
@@ -103,7 +121,10 @@ export class OnboardingController {
         const claimed = await db.prepare('UPDATE onboardingInvite SET leaseUntil = ? WHERE tokenHash = ? AND sentAt IS NULL AND leaseUntil < ? RETURNING tokenHash').bind(Date.now() + 60000, hash, Date.now()).first()
         if (claimed) {
           try {
-            await sendTransactionalEmail(this.env, email, { kind: 'invite', url: `https://app.fonteslabs.com/?invite=${body.token}` })
+            const apiOrigin = new URL(this.env.BETTER_AUTH_URL || 'https://api.fonteslabs.com')
+            const local = apiOrigin.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(apiOrigin.hostname)
+            const appOrigin = local ? `http://${apiOrigin.hostname}:5173` : 'https://app.fonteslabs.com'
+            await sendTransactionalEmail(this.env, email, { kind: 'invite', url: `${appOrigin}/?invite=${body.token}` })
             await db.prepare('UPDATE onboardingInvite SET sentAt = ?, leaseUntil = 0 WHERE tokenHash = ?').bind(Date.now(), hash).run()
           } catch (error) {
             await db.prepare('UPDATE onboardingInvite SET leaseUntil = 0 WHERE tokenHash = ?').bind(hash).run()
