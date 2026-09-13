@@ -25,7 +25,7 @@ const TRUSTED_ORIGINS = [
   'https://builder.fonteslabs.com',
   'https://fontes-9lo.pages.dev',
   'https://*.fontes-9lo.pages.dev',
-  'http://localhost:5173',
+  'https://local.fonteslabs.com:5173',
 ]
 
 function trustedOrigins(env: WorkerEnv) {

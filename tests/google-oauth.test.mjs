@@ -25,8 +25,8 @@ test('local APIs do not offer Google sign-in', async () => {
     const context = await dev.auth.$context
     assert.equal(context.socialProviders.length, 0)
     const response = await dev.auth.handler(new Request(`${origin}/api/auth/sign-in/social`, {
-      method: 'POST', headers: {'content-type': 'application/json', origin: 'http://localhost:5173'},
-      body: JSON.stringify({provider: 'google', callbackURL: 'http://localhost:5173/', disableRedirect: true}),
+      method: 'POST', headers: {'content-type': 'application/json', origin: `http://${new URL(origin).hostname}:5173`},
+      body: JSON.stringify({provider: 'google', callbackURL: `http://${new URL(origin).hostname}:5173/`, disableRedirect: true}),
     }))
     assert.equal(response.status, 404)
   }
@@ -61,3 +61,15 @@ test('cloud keeps the direct callback and rejects a missing state cookie', async
   assert.equal(AuthController.isTrustedOrigin('http://127.0.0.1:5173', { BETTER_AUTH_URL: cloud }), false)
   assert.equal(AuthController.isTrustedOrigin('http://127.0.0.1:5174', { BETTER_AUTH_URL: local }), false)
  })
+
+
+test('HTTPS local frontend uses production Google OAuth and exact origin trust', async () => {
+  const frontend = 'https://local.fonteslabs.com:5173'
+  const prod = fixture(cloud)
+  const initial = await start(prod.auth, cloud, frontend)
+  assert.equal(initial.url.searchParams.get('redirect_uri'), callback)
+  assert.ok(cookies(initial.response).includes('__Secure-better-auth.state='))
+  for (const rejected of ['http://local.fonteslabs.com:5173', 'https://local.fonteslabs.com:5174', 'https://other.fonteslabs.com:5173', 'http://localhost:5173']) {
+    assert.equal(AuthController.isTrustedOrigin(rejected, { BETTER_AUTH_URL: cloud }), false)
+  }
+})
