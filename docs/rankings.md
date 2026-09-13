@@ -109,3 +109,15 @@ The app defaults to seven days with 24-hour and 30-day controls, requesting
 by current count descending and ID ascending, before limiting. The app displays
 counts and neutral sparklines, with units in accessible descriptions and tooltips.
 Stored agency and newsroom bylines are included. Counts use discovery time.
+
+## Scroll pagination
+
+`offset` is optional (default 0), a whole number from 0 through 99,999,999.
+It applies separately to each list, after ordering. Ranks remain absolute,
+starting at `offset + 1`. Requests without offset keep the existing behavior.
+The app popup requests 20 rows at a time and keeps the same `from` and `until`
+while scrolling. A short or empty page ends the list. Existing aggregation and
+statement timeouts remain in place. Reprocessed historical associations can still
+change between requests; the app suppresses duplicate IDs when appending.
+
+Release the engine offset support, then the API validation, then the app.

@@ -124,3 +124,16 @@ test('volume keeps activity but orders by article count independently of growth'
   p.writers[1].count = 4; p.writers[1].activity[0] = 4; p.writers[1].growth_percent = 300
   assert.throws(() => validateRankings(p, q, now))
 })
+
+
+test('pagination accepts a non-negative offset and validates absolute ranks', () => {
+  assert.equal(parseRankingsQuery(new URLSearchParams(params + '&offset=20'), now).offset, 20)
+  for (const offset of ['-1', '1.5', '01', '', '100000000', 'NaN']) {
+    assert.throws(() => parseRankingsQuery(new URLSearchParams(params + '&offset=' + offset), now))
+  }
+  assert.throws(() => parseRankingsQuery(new URLSearchParams(params + '&offset=0&offset=1'), now))
+  const data = payload()
+  for (const key of ['writers', 'categories', 'mentions']) data[key].forEach(row => { row.rank += 20 })
+  assert.equal(validateRankings(data, { ...query, offset: 20 }, now).writers[0].rank, 21)
+  assert.throws(() => validateRankings(payload(), { ...query, offset: 20 }, now))
+})

@@ -1,6 +1,6 @@
 import { parsePeriod } from '../briefing/period.ts'
 
-export type RankingsQuery = { from: number; until: number; limit: number; sort?: 'growth' | 'volume' }
+export type RankingsQuery = { from: number; until: number; limit: number; offset?: number; sort?: 'growth' | 'volume' }
 export type RankingItem = { id: number; name: string; rank: number; count: number; unit: 'articles' | 'events'; previous_count?: number; growth_percent?: number | null; activity?: number[] }
 export type MentionItem = RankingItem & { kind: 'person' | 'org' | 'location'; slug: string | null }
 export type Rankings = {
@@ -19,14 +19,16 @@ export type Rankings = {
 
 export function parseRankingsQuery(params: URLSearchParams, now: number): RankingsQuery {
   for (const key of params.keys()) {
-    if (!['from', 'until', 'limit', 'sort'].includes(key) || params.getAll(key).length !== 1) throw new Error('INVALID_RANKINGS_PARAMETERS')
+    if (!['from', 'until', 'limit', 'sort', 'offset'].includes(key) || params.getAll(key).length !== 1) throw new Error('INVALID_RANKINGS_PARAMETERS')
   }
   const { from, until } = parsePeriod({ from: params.get('from'), until: params.get('until') }, now)
   const raw = params.get('limit') ?? '10'
   if (!/^[1-9]\d?$/.test(raw) || Number(raw) > 50) throw new Error('INVALID_RANKINGS_PARAMETERS')
+  const offset = params.get('offset')
+  if (offset !== null && (!/^(0|[1-9]\d{0,7})$/.test(offset))) throw new Error('INVALID_RANKINGS_PARAMETERS')
   const sort = params.get('sort')
   if (sort !== null && sort !== 'count' && sort !== 'growth' && sort !== 'volume') throw new Error('INVALID_RANKINGS_PARAMETERS')
-  return { from, until, limit: Number(raw), ...(sort === 'growth' || sort === 'volume' ? { sort } : {}) }
+  return { from, until, limit: Number(raw), ...(offset !== null ? { offset: Number(offset) } : {}), ...(sort === 'growth' || sort === 'volume' ? { sort } : {}) }
 }
 
 const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -50,10 +52,10 @@ export function validateRankings(value: unknown, query: RankingsQuery, now: numb
     return input.map((item: unknown, index) => {
       if (!record(item) || !count(item.id) || item.id === 0 || ids.has(item.id)
         || typeof item.name !== 'string' || !item.name.trim() || item.name.length > 1000
-        || item.rank !== index + 1 || !count(item.count) || item.count === 0 || item.count > total || item.unit !== unit) return invalid()
+        || item.rank !== index + 1 + (query.offset ?? 0) || !count(item.count) || item.count === 0 || item.count > total || item.unit !== unit) return invalid()
       if (query.sort !== 'growth' && previous && (item.count > previous.count || (item.count === previous.count && item.id <= previous.id))) return invalid()
       ids.add(item.id)
-      const result: RankingItem = { id: item.id, name: item.name, rank: index + 1, count: item.count, unit }
+      const result: RankingItem = { id: item.id, name: item.name, rank: index + 1 + (query.offset ?? 0), count: item.count, unit }
       if (query.sort) {
         if (!count(item.previous_count) || !Array.isArray(item.activity) || item.activity.length !== 24
           || !item.activity.every(count) || item.activity.reduce((sum: number, n: number) => sum + n, 0) !== item.count) return invalid()
