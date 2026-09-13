@@ -281,3 +281,19 @@ for (const apiOrigin of ['https://api.fonteslabs.com', 'http://127.0.0.1:8788', 
   f.sql.close()
  })
 }
+
+test('invitation failures distinguish missing, expired, revoked and wrong-account tokens', async () => {
+ const f=fixture();await f.call('',f.setup);const token='fb'.repeat(32)
+ assert.equal((await (await f.call('/invitation',{token})).json()).code,'INVITATION_NOT_FOUND')
+ await f.call('/invite',{token,email:'v@example.com',organizationId:'onboarding_u'})
+ for (const route of ['/invitation','/join']) {
+  const response=await f.call(route,{token});assert.equal(response.status,403)
+  const error=await response.json();assert.equal(error.code,'INVITATION_ACCOUNT_MISMATCH');assert.equal(error.recipientEmail,'v@example.com')
+ }
+ assert.equal(f.sql.prepare('SELECT count(*) n FROM member').get().n,1)
+ f.sql.exec("UPDATE member SET role='member'")
+ assert.equal((await (await f.call('/invitation',{token})).json()).code,'INVITATION_REVOKED')
+ f.sql.exec('UPDATE onboardingInvite SET expiresAt=0')
+ assert.equal((await (await f.call('/invitation',{token})).json()).code,'INVITATION_EXPIRED')
+ f.sql.close()
+})
