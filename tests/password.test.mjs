@@ -80,3 +80,18 @@ test('set-password requires current password, with empty input only for first se
  assert.ok(!schema.paths['/api/auth/change-password'])
  assert.ok(!schema.paths['/api/onboarding/password'])
 })
+
+
+test('invited registration creates a verified password account and never overwrites an existing account', async () => {
+ const f=fixture(),email='invited-new@example.com',password='invitation-password-123'
+ const response=await f.auth.registerInvitedAccount(f.request('/unused',{}),email,password)
+ assert.equal(response.status,200)
+ const session=await f.auth.session(f.request('/get-session',undefined,cookies(response)))
+ assert.equal(session.user.email,email);assert.equal(session.user.emailVerified,true)
+ assert.equal(f.env.messages.length,0,'invitation replaces the registration OTP')
+ const stored=f.env.store.account[0].password;assert.notEqual(stored,password)
+ const duplicate=await f.auth.registerInvitedAccount(f.request('/unused',{}),email,'replacement-password-123')
+ assert.equal(duplicate.status,409);assert.equal(f.env.store.account[0].password,stored)
+ assert.equal(f.env.store.user.length,1)
+ assert.equal((await f.call('/sign-in/email',{email,password})).status,200)
+})

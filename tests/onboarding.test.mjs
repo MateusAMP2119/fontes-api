@@ -28,11 +28,11 @@ function fixture(env = {}) {
  sql.exec(readFileSync(new URL('../migrations/0001_onboarding.sql',import.meta.url),'utf8'))
  const db = { prepare(query) { let values=[]; return { bind(...args){values=args;return this}, async first(){return sql.prepare(query).get(...values)??null},async all(){return {results:sql.prepare(query).all(...values)}},async run(){return sql.prepare(query).run(...values)} } }, async batch(statements){sql.exec('BEGIN');try{const rows=[];for(const statement of statements)rows.push(await statement.run());sql.exec('COMMIT');return rows}catch(error){sql.exec('ROLLBACK');throw error}} }
  let identity={user:{id:'u',email:'u@example.com',emailVerified:true},session:{id:'s',activeOrganizationId:null,createdAt:new Date().toISOString()}}
- const emails=[]
- const controller=new OnboardingController({...env,APP_DB:db,AUTH_EMAIL:{send:async email=>{emails.push(email);return {messageId:'test-invite'}}}},{session:async()=>identity,setPassword:async(request,password)=>{const existing=sql.prepare("SELECT id FROM account WHERE userId=? AND providerId='credential' AND password IS NOT NULL").get(identity.user.id);if(existing)throw Error('already set');sql.prepare("INSERT INTO account VALUES (?,?,'credential',?)").run('new-'+identity.user.id,identity.user.id,'hashed-in-auth-boundary')}})
+ const emails=[],registrations=[]
+ const controller=new OnboardingController({...env,APP_DB:db,AUTH_EMAIL:{send:async email=>{emails.push(email);return {messageId:'test-invite'}}}},{registerInvitedAccount:async(request,email,password)=>{registrations.push({email,password});return Response.json({registered:true})},session:async()=>identity,setPassword:async(request,password)=>{const existing=sql.prepare("SELECT id FROM account WHERE userId=? AND providerId='credential' AND password IS NOT NULL").get(identity.user.id);if(existing)throw Error('already set');sql.prepare("INSERT INTO account VALUES (?,?,'credential',?)").run('new-'+identity.user.id,identity.user.id,'hashed-in-auth-boundary')}})
  const call=(path='',body,origin='https://app.fonteslabs.com')=>controller.handle(new Request('https://api.fonteslabs.com/api/onboarding'+path,{method:body?'POST':'GET',headers:{origin,'content-type':'application/json'},body:body?JSON.stringify(body):undefined}))
  const setup={operationId:'operation-first',revision:1,name:'Fontes',slug:'fontes-team',profileName:'Mateus',completed:true,changelog:true,daily:false}
- return {sql,call,setup,emails,organizations:new OrganizationModel(db),identity:value=>{identity=value}}
+ return {sql,call,setup,emails,registrations,organizations:new OrganizationModel(db),identity:value=>{identity=value}}
 }
 test('atomic setup, idempotent retries, stale rejection and default project',async()=>{
  const f=fixture();assert.equal((await f.call('',f.setup)).status,200);assert.equal((await f.call('',f.setup)).status,200)
@@ -295,5 +295,31 @@ test('invitation failures distinguish missing, expired, revoked and wrong-accoun
  assert.equal((await (await f.call('/invitation',{token})).json()).code,'INVITATION_REVOKED')
  f.sql.exec('UPDATE onboardingInvite SET expiresAt=0')
  assert.equal((await (await f.call('/invitation',{token})).json()).code,'INVITATION_EXPIRED')
+ f.sql.close()
+})
+
+
+test('public invitation registration validates token, expiry, origin and recipient without granting existing-account access', async () => {
+ const f=fixture();f.sql.exec("ALTER TABLE user ADD COLUMN email TEXT; UPDATE user SET email=id || '@example.com'")
+ await f.call('',f.setup);const token='ed'.repeat(32)
+ await f.call('/invite',{token,email:'new@example.com',organizationId:'onboarding_u'})
+ f.identity(null)
+ const preview=await f.call('/invitation/registration',{token})
+ assert.deepEqual(await preview.json(),{email:'new@example.com',step:'password'})
+ assert.equal((await f.call('/invitation/registration',{token,password:'valid-password-123',email:'attacker@example.com'})).status,200)
+ assert.deepEqual(f.registrations,[{email:'new@example.com',password:'valid-password-123'}])
+ assert.equal((await f.call('/invitation/registration',{token,password:'short'})).status,400)
+ assert.equal((await f.call('/invitation/registration',{token},'https://evil.example')).status,403)
+ f.sql.exec("UPDATE onboardingInvite SET email='v@example.com'")
+ assert.deepEqual(await (await f.call('/invitation/registration',{token})).json(),{email:'v@example.com',step:'email'})
+ assert.equal((await f.call('/invitation/registration',{token,password:'cannot-replace-123'})).status,409)
+ f.sql.exec("UPDATE onboardingInvite SET email=NULL")
+ assert.equal((await f.call('/invitation/registration',{token,password:'cannot-register-123'})).status,400)
+ assert.equal(f.registrations.length,1)
+ f.sql.exec('UPDATE onboardingInvite SET expiresAt=0')
+ assert.equal((await f.call('/invitation/registration',{token})).status,403)
+ f.sql.exec('UPDATE onboardingInvite SET expiresAt=9999999999999; DELETE FROM member')
+ assert.equal((await f.call('/invitation/registration',{token})).status,403)
+ assert.equal((await f.call('/invitation/registration',{token:'af'.repeat(32)})).status,403)
  f.sql.close()
 })

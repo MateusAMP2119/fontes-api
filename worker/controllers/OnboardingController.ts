@@ -25,9 +25,24 @@ export class OnboardingController {
 
   async handle(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname
-    if (!['/api/onboarding', '/api/onboarding/invite', '/api/onboarding/join', '/api/onboarding/invitation', '/api/onboarding/workspaces', '/api/onboarding/workspaces/select', '/api/onboarding/workspaces/create'].includes(path)) return new Response(null, { status: 404 })
+    if (!['/api/onboarding', '/api/onboarding/invite', '/api/onboarding/join', '/api/onboarding/invitation', '/api/onboarding/invitation/registration', '/api/onboarding/workspaces', '/api/onboarding/workspaces/select', '/api/onboarding/workspaces/create'].includes(path)) return new Response(null, { status: 404 })
     if (request.method !== 'GET' && request.method !== 'POST') return new Response(null, { status: 405 })
     if (request.method === 'POST' && !AuthController.isTrustedOrigin(request.headers.get('origin'), this.env)) return new Response(null, { status: 403 })
+    if (path === '/api/onboarding/invitation/registration') {
+      if (request.method !== 'POST') return new Response(null, { status: 405 })
+      let body: Record<string, unknown>
+      try { body = await request.json() as Record<string, unknown> } catch { return new Response(null, { status: 400 }) }
+      if (!body || typeof body.token !== 'string' || !tokenPattern.test(body.token)) return new Response(null, { status: 400 })
+      const invite = await this.env.APP_DB.prepare("SELECT i.email FROM onboardingInvite i JOIN organization o ON o.id = i.organizationId WHERE i.tokenHash = ? AND i.expiresAt > ? AND EXISTS (SELECT 1 FROM member m WHERE m.organizationId = i.organizationId AND m.userId = i.creatorId AND m.role IN ('owner', 'admin'))")
+        .bind(await tokenHash(body.token), Date.now()).first<{ email: string | null }>()
+      if (!invite) return Response.json({ message: 'Convite indisponível. É necessário um novo convite.' }, { status: 403 })
+      if (!invite.email) return body.password === undefined ? Response.json({ email: null, step: 'email' }) : Response.json({ message: 'Confirmação de email necessária.' }, { status: 400 })
+      const existing = await this.env.APP_DB.prepare('SELECT id FROM user WHERE email = ?').bind(invite.email).first()
+      if (body.password === undefined) return Response.json({ email: invite.email, step: existing ? 'email' : 'password' })
+      if (existing) return Response.json({ message: 'Email já registado. Início de sessão necessário.', code: 'INVITATION_ACCOUNT_EXISTS' }, { status: 409 })
+      if (typeof body.password !== 'string' || body.password.length < 8 || body.password.length > 128) return Response.json({ message: 'Palavra-passe entre 8 e 128 caracteres necessária.' }, { status: 400 })
+      return this.auth.registerInvitedAccount(request, invite.email, body.password)
+    }
     const session = await this.auth.session(request)
     if (!session?.user.emailVerified) return Response.json({ message: 'Confirmação de email necessária.' }, { status: 401 })
     const userId = session.user.id

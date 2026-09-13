@@ -76,6 +76,19 @@ export class AuthController {
   }
 
   session(request: Request) { return this.auth.api.getSession({ headers: request.headers }) }
+  async registerInvitedAccount(request: Request, email: string, password: string) {
+    // Only a newly created account may be verified by an invitation. Better Auth
+    // returns a synthetic ID for duplicates, including concurrent registrations.
+    const signup = await this.auth.api.signUpEmail({ body: { email, password, name: email.split('@')[0] }, asResponse: true })
+    if (!signup.ok) return signup
+    const result = await signup.json() as { user: { id: string } }
+    const context = await this.auth.$context
+    const created = await context.internalAdapter.findUserById(result.user.id)
+    if (!created || created.email !== email) return Response.json({ message: 'Email já registado. Início de sessão necessário.', code: 'INVITATION_ACCOUNT_EXISTS' }, { status: 409 })
+    await context.internalAdapter.updateUser(created.id, { emailVerified: true })
+    return this.auth.api.signInEmail({ headers: request.headers, body: { email, password }, asResponse: true })
+  }
+
   bearerSession(request: Request) {
     if (!/^Bearer\s+\S+$/i.test(request.headers.get('authorization') ?? '')) return Promise.resolve(null)
     const headers = new Headers(request.headers)
